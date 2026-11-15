@@ -14,23 +14,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
 
 private val Blue = Color(0xFF2457C5)
-private val LightBlue = Color(0xFFEAF1FF)
-
-data class ItemData(
-    val title: String,
-    val description: String,
-    val college: String,
-    val category: String,
-    val status: String
-)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,40 +36,42 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun FindQitApp() {
+
+    val repository = remember { FirebaseRepository() }
+
     var selectedTab by remember { mutableStateOf("Lost") }
     var selectedPage by remember { mutableStateOf("Home") }
     var search by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("All") }
 
-    var itemList by remember {
-        mutableStateOf(
-            listOf(
-                ItemData(
-                    "Samsung Mobile",
-                    "Black Samsung phone",
-                    "IEM Kolkata",
-                    "Mobile",
-                    "LOST"
-                ),
-                ItemData(
-                    "College ID Card",
-                    "ID card found near college gate",
-                    "IEM Kolkata",
-                    "ID Card",
-                    "FOUND"
-                ),
-                ItemData(
-                    "Engineering Book",
-                    "BTech first year book",
-                    "IEM Kolkata",
-                    "Books",
-                    "LOST"
-                )
-            )
-        )
+    var activeItems by remember {
+        mutableStateOf<List<FindQitItem>>(emptyList())
     }
 
-    var history by remember { mutableStateOf(listOf<ItemData>()) }
+    var history by remember {
+        mutableStateOf<List<FindQitItem>>(emptyList())
+    }
+
+    var message by remember { mutableStateOf("") }
+
+    // Connect to Firestore
+    DisposableEffect(repository) {
+
+        val activeListener = repository.observeActiveItems(
+            onData = { activeItems = it },
+            onError = { message = it }
+        )
+
+        val historyListener = repository.observeSolvedHistory(
+            onData = { history = it },
+            onError = { message = it }
+        )
+
+        onDispose {
+            activeListener.remove()
+            historyListener.remove()
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -86,6 +79,7 @@ fun FindQitApp() {
                 listOf(
                     "Home", "Search", "Post", "History", "Profile"
                 ).forEach { page ->
+
                     NavigationBarItem(
                         selected = selectedPage == page,
                         onClick = { selectedPage = page },
@@ -115,6 +109,14 @@ fun FindQitApp() {
                 .padding(padding)
         ) {
 
+            if (message.isNotBlank()) {
+                Text(
+                    message,
+                    color = Color.Red,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+
             when (selectedPage) {
 
                 "Home", "Search" -> {
@@ -122,6 +124,7 @@ fun FindQitApp() {
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
+
                         Text(
                             "FindQit",
                             fontSize = 29.sp,
@@ -162,7 +165,7 @@ fun FindQitApp() {
                         )
 
                         Text(
-                            "IEM Kolkata • West Bengal",
+                            "Select your college and location",
                             color = Blue,
                             fontSize = 14.sp
                         )
@@ -179,13 +182,13 @@ fun FindQitApp() {
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement =
-                                Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             listOf(
                                 "All", "Mobile", "Books",
                                 "ID Card", "Others"
                             ).forEach { name ->
+
                                 Surface(
                                     color = if (category == name)
                                         Blue else Color.White,
@@ -197,12 +200,12 @@ fun FindQitApp() {
                                     Text(
                                         name,
                                         modifier = Modifier.padding(
-                                            horizontal = 9.dp,
+                                            horizontal = 8.dp,
                                             vertical = 10.dp
                                         ),
                                         color = if (category == name)
                                             Color.White else Color.DarkGray,
-                                        fontSize = 11.sp
+                                        fontSize = 10.sp
                                     )
                                 }
                             }
@@ -210,28 +213,16 @@ fun FindQitApp() {
 
                         Spacer(Modifier.height(20.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement =
-                                Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                "Recent Listings",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-
-                            Text(
-                                "View All",
-                                color = Blue
-                            )
-                        }
+                        Text(
+                            "Recent Listings",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
 
                         Spacer(Modifier.height(12.dp))
 
                         Row(
-                            horizontalArrangement =
-                                Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             FilterChip(
                                 selected = selectedTab == "Lost",
@@ -247,34 +238,42 @@ fun FindQitApp() {
                         }
                     }
 
+                    val filtered = activeItems.filter {
+                        it.status == selectedTab.uppercase() &&
+                        (category == "All" || it.category == category) &&
+                        (
+                            it.title.contains(search, ignoreCase = true) ||
+                            it.description.contains(search, ignoreCase = true)
+                        )
+                    }
+
                     LazyColumn(
                         contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            bottom = 20.dp
+                            horizontal = 16.dp,
+                            vertical = 10.dp
                         ),
-                        verticalArrangement =
-                            Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val filtered = itemList.filter {
-                            it.status == selectedTab.uppercase() &&
-                            (category == "All" ||
-                                it.category == category) &&
-                            (it.title.contains(
-                                search,
-                                ignoreCase = true
-                            ) || it.description.contains(
-                                search,
-                                ignoreCase = true
-                            ))
-                        }
 
-                        items(filtered) { item ->
+                        items(
+                            items = filtered,
+                            key = { it.id }
+                        ) { item ->
+
                             ItemCard(
                                 item = item,
+                                showSolvedButton = true,
                                 onSolved = {
-                                    history = history + item
-                                    itemList = itemList - item
+
+                                    repository.markSolved(
+                                        itemId = item.id,
+                                        onSuccess = {
+                                            message = "Item moved to Solved History"
+                                        },
+                                        onError = {
+                                            message = it
+                                        }
+                                    )
                                 }
                             )
                         }
@@ -292,7 +291,9 @@ fun FindQitApp() {
                 }
 
                 "History" -> {
+
                     Column(Modifier.padding(16.dp)) {
+
                         Text(
                             "Solved History",
                             fontSize = 25.sp,
@@ -308,44 +309,76 @@ fun FindQitApp() {
                                 color = Color.Gray
                             )
                         } else {
-                            history.forEach {
-                                ItemCard(it, onSolved = {})
+                            LazyColumn(
+                                verticalArrangement =
+                                    Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(history, key = { it.id }) {
+                                    ItemCard(
+                                        item = it,
+                                        showSolvedButton = false,
+                                        onSolved = {}
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
                 "Post" -> {
+
                     PostScreen(
-                        onPost = { newItem ->
-                            itemList = itemList + newItem
-                            selectedTab = if (
-                                newItem.status == "LOST"
-                            ) "Lost" else "Found"
-                            selectedPage = "Home"
+                        onPost = { title, description, college,
+                                   categoryValue, status ->
+
+                            repository.postItem(
+                                title = title,
+                                description = description,
+                                college = college,
+                                category = categoryValue,
+                                status = status,
+
+                                onSuccess = {
+                                    selectedTab =
+                                        if (status == "LOST") "Lost" else "Found"
+
+                                    message = "Item posted successfully!"
+                                    selectedPage = "Home"
+                                },
+
+                                onError = {
+                                    message = it
+                                }
+                            )
                         }
                     )
                 }
 
                 "Profile" -> {
+
                     Column(
                         Modifier.padding(20.dp)
                     ) {
+
                         Text(
                             "My Profile",
                             fontSize = 25.sp,
                             fontWeight = FontWeight.Bold,
                             color = Blue
                         )
+
                         Spacer(Modifier.height(20.dp))
+
                         Text("My Lost Items")
                         Text("My Found Items")
                         Text("My Solved History")
                         Text("Privacy Settings")
                         Text("Login / Logout")
+
                         Spacer(Modifier.height(15.dp))
+
                         Text(
-                            "Your phone number and personal details are private.",
+                            "Your personal contact details are private.",
                             color = Color.Gray
                         )
                     }
@@ -357,9 +390,14 @@ fun FindQitApp() {
 
 @Composable
 fun ItemCard(
-    item: ItemData,
+    item: FindQitItem,
+    showSolvedButton: Boolean,
     onSolved: () -> Unit
 ) {
+
+    val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+    val isOwner = currentUid != null && item.ownerId == currentUid
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -367,13 +405,14 @@ fun ItemCard(
             containerColor = Color.White
         )
     ) {
+
         Column(Modifier.padding(15.dp)) {
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement =
-                    Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
+
                 Text(
                     item.title,
                     fontSize = 17.sp,
@@ -381,9 +420,11 @@ fun ItemCard(
                 )
 
                 Surface(
-                    color = if (item.status == "LOST")
-                        Color(0xFFFFE5E5)
-                    else Color(0xFFE0F5E8),
+                    color = when (item.status) {
+                        "LOST" -> Color(0xFFFFE5E5)
+                        "FOUND" -> Color(0xFFE0F5E8)
+                        else -> Color(0xFFE8E8E8)
+                    },
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
@@ -398,6 +439,7 @@ fun ItemCard(
             Spacer(Modifier.height(7.dp))
 
             Text(item.description, color = Color.DarkGray)
+
             Text(
                 "${item.college} • ${item.category}",
                 color = Color.Gray,
@@ -406,8 +448,10 @@ fun ItemCard(
 
             Spacer(Modifier.height(10.dp))
 
-            OutlinedButton(onClick = onSolved) {
-                Text("Mark as Solved")
+            if (showSolvedButton && isOwner) {
+                OutlinedButton(onClick = onSolved) {
+                    Text("Mark as Solved")
+                }
             }
 
             Text(
@@ -421,8 +465,11 @@ fun ItemCard(
 
 @Composable
 fun PostScreen(
-    onPost: (ItemData) -> Unit
+    onPost: (
+        String, String, String, String, String
+    ) -> Unit
 ) {
+
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var college by remember { mutableStateOf("") }
@@ -434,6 +481,7 @@ fun PostScreen(
             .fillMaxSize()
             .padding(20.dp)
     ) {
+
         Text(
             "Post an Item",
             fontSize = 25.sp,
@@ -444,22 +492,22 @@ fun PostScreen(
         Spacer(Modifier.height(15.dp))
 
         OutlinedTextField(
-            title,
-            { title = it },
+            value = title,
+            onValueChange = { title = it },
             label = { Text("Item Name") },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            description,
-            { description = it },
+            value = description,
+            onValueChange = { description = it },
             label = { Text("Description") },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            college,
-            { college = it },
+            value = college,
+            onValueChange = { college = it },
             label = { Text("College Name") },
             modifier = Modifier.fillMaxWidth()
         )
@@ -484,11 +532,14 @@ fun PostScreen(
             )
         }
 
+        Spacer(Modifier.height(10.dp))
+
         Text("Category")
 
-        Row {
+        Column {
             listOf("Mobile", "Books", "ID Card", "Others")
                 .forEach { value ->
+
                     FilterChip(
                         selected = selectedCategory == value,
                         onClick = { selectedCategory = value },
@@ -507,13 +558,11 @@ fun PostScreen(
                     college.isNotBlank()
                 ) {
                     onPost(
-                        ItemData(
-                            title,
-                            description,
-                            college,
-                            selectedCategory,
-                            selectedStatus
-                        )
+                        title.trim(),
+                        description.trim(),
+                        college.trim(),
+                        selectedCategory,
+                        selectedStatus
                     )
                 }
             },
