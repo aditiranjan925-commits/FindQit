@@ -95,7 +95,7 @@ fun FindQitApp() {
                                     "Home" -> Icons.Default.Home
                                     "Search" -> Icons.Default.Search
                                     "Post" -> Icons.Default.AddCircle
-                                    "History" -> Icons.Default.Folder
+                                    "History" -> Icons.Default.Home
                                     else -> Icons.Default.Person
                                 },
                                 contentDescription = page
