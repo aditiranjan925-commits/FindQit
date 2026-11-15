@@ -37,7 +37,7 @@ jobs:
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
 
       - name: Build APK
-                run: gradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" assembleDebug
+        run: gradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
