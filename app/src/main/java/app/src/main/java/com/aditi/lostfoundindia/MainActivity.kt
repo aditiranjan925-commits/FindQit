@@ -1,25 +1,36 @@
 
 package com.aditi.lostfoundindia
 
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
-import java.util.UUID
+import androidx.compose.ui.unit.sp
+
+private val Blue = Color(0xFF2457C5)
+private val LightBlue = Color(0xFFEAF1FF)
+
+data class ItemData(
+    val title: String,
+    val description: String,
+    val college: String,
+    val category: String,
+    val status: String
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,350 +45,481 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun FindQitApp() {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("") }
-    var loggedIn by remember {
-        mutableStateOf(FirebaseAuth.getInstance().currentUser != null)
-    }
+    var selectedTab by remember { mutableStateOf("Lost") }
+    var selectedPage by remember { mutableStateOf("Home") }
+    var search by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("All") }
 
-    if (loggedIn) {
-        HomeScreen(
-            onLogout = {
-                FirebaseAuth.getInstance().signOut()
-                loggedIn = false
-            }
+    var itemList by remember {
+        mutableStateOf(
+            listOf(
+                ItemData(
+                    "Samsung Mobile",
+                    "Black Samsung phone",
+                    "IEM Kolkata",
+                    "Mobile",
+                    "LOST"
+                ),
+                ItemData(
+                    "College ID Card",
+                    "ID card found near college gate",
+                    "IEM Kolkata",
+                    "ID Card",
+                    "FOUND"
+                ),
+                ItemData(
+                    "Engineering Book",
+                    "BTech first year book",
+                    "IEM Kolkata",
+                    "Books",
+                    "LOST"
+                )
+            )
         )
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                "FindQit",
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text("Lost Today. Found Tomorrow.")
-
-            Spacer(Modifier.height(25.dp))
-
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("Email") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Password") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(Modifier.height(15.dp))
-
-            Button(
-                onClick = {
-                    if (email.isBlank() || password.length < 6) {
-                        message = "Enter valid email and 6-character password"
-                    } else {
-                        FirebaseAuth.getInstance()
-                            .signInWithEmailAndPassword(email.trim(), password)
-                            .addOnSuccessListener {
-                                loggedIn = true
-                                message = ""
-                            }
-                            .addOnFailureListener {
-                                message = it.localizedMessage ?: "Login failed"
-                            }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Login")
-            }
-
-            OutlinedButton(
-                onClick = {
-                    if (email.isBlank() || password.length < 6) {
-                        message = "Enter valid email and 6-character password"
-                    } else {
-                        FirebaseAuth.getInstance()
-                            .createUserWithEmailAndPassword(email.trim(), password)
-                            .addOnSuccessListener {
-                                loggedIn = true
-                                message = ""
-                            }
-                            .addOnFailureListener {
-                                message = it.localizedMessage ?: "Signup failed"
-                            }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Create Account")
-            }
-
-            Text(message, color = MaterialTheme.colorScheme.error)
-        }
-    }
-}
-
-@Composable
-fun HomeScreen(onLogout: () -> Unit) {
-    var selectedType by remember { mutableStateOf("") }
-    var refresh by remember { mutableIntStateOf(0) }
-    val postedItems = remember { mutableStateListOf<Map<String, Any>>() }
-
-    LaunchedEffect(refresh) {
-        FirebaseFirestore.getInstance()
-            .collection("items")
-            .get()
-            .addOnSuccessListener { documents ->
-                postedItems.clear()
-                documents.forEach {
-                    it.data?.let { data -> postedItems.add(data) }
-                }
-            }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(18.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "FindQit",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
-            )
-            TextButton(onClick = onLogout) {
-                Text("Logout")
-            }
-        }
+    var history by remember { mutableStateOf(listOf<ItemData>()) }
 
-        Text("Welcome to FindQit!")
-
-        Spacer(Modifier.height(16.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = { selectedType = "Lost" }) {
-                Text("Lost Item")
-            }
-            Button(onClick = { selectedType = "Found" }) {
-                Text("Found Item")
-            }
-        }
-
-        Spacer(Modifier.height(15.dp))
-
-        if (selectedType.isNotEmpty()) {
-            ItemForm(
-                type = selectedType,
-                onCancel = { selectedType = "" },
-                onSaved = {
-                    selectedType = ""
-                    refresh++
-                }
-            )
-        } else {
-            Text(
-                "Recent Items",
-                style = MaterialTheme.typography.headlineSmall
-            )
-
-            LazyColumn {
-                items(postedItems) { item ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
-                    ) {
-                        Column(Modifier.padding(14.dp)) {
-                            Text(
-                                item["title"]?.toString() ?: "Item",
-                                fontWeight = FontWeight.Bold
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                listOf(
+                    "Home", "Search", "Post", "History", "Profile"
+                ).forEach { page ->
+                    NavigationBarItem(
+                        selected = selectedPage == page,
+                        onClick = { selectedPage = page },
+                        icon = {
+                            Icon(
+                                when (page) {
+                                    "Home" -> Icons.Default.Home
+                                    "Search" -> Icons.Default.Search
+                                    "Post" -> Icons.Default.AddCircle
+                                    "History" -> Icons.Default.History
+                                    else -> Icons.Default.Person
+                                },
+                                contentDescription = page
                             )
-                            Text("Type: ${item["type"] ?: ""}")
-                            Text("College: ${item["college"] ?: ""}")
-                            Text("Location: ${item["location"] ?: ""}")
-                            Text("Description: ${item["description"] ?: ""}")
-                            Text("Contact: ${item["contact"] ?: ""}")
+                        },
+                        label = { Text(page) }
+                    )
+                }
+            }
+        }
+    ) { padding ->
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFF7F8FC))
+                .padding(padding)
+        ) {
+
+            when (selectedPage) {
+
+                "Home", "Search" -> {
+
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            "FindQit",
+                            fontSize = 29.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Blue
+                        )
+
+                        Text(
+                            "Find what you lost. Return what you found.",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+
+                        Spacer(Modifier.height(15.dp))
+
+                        OutlinedTextField(
+                            value = search,
+                            onValueChange = { search = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text("Search mobile, books, ID card...")
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null
+                                )
+                            },
+                            shape = RoundedCornerShape(15.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(Modifier.height(15.dp))
+
+                        Text(
+                            "Your College",
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            "IEM Kolkata • West Bengal",
+                            color = Blue,
+                            fontSize = 14.sp
+                        )
+
+                        Spacer(Modifier.height(18.dp))
+
+                        Text(
+                            "Categories",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.SpaceBetween
+                        ) {
+                            listOf(
+                                "All", "Mobile", "Books",
+                                "ID Card", "Others"
+                            ).forEach { name ->
+                                Surface(
+                                    color = if (category == name)
+                                        Blue else Color.White,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.clickable {
+                                        category = name
+                                    }
+                                ) {
+                                    Text(
+                                        name,
+                                        modifier = Modifier.padding(
+                                            horizontal = 9.dp,
+                                            vertical = 10.dp
+                                        ),
+                                        color = if (category == name)
+                                            Color.White else Color.DarkGray,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement =
+                                Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "Recent Listings",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+
+                            Text(
+                                "View All",
+                                color = Blue
+                            )
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Row(
+                            horizontalArrangement =
+                                Arrangement.spacedBy(10.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedTab == "Lost",
+                                onClick = { selectedTab = "Lost" },
+                                label = { Text("Lost Items") }
+                            )
+
+                            FilterChip(
+                                selected = selectedTab == "Found",
+                                onClick = { selectedTab = "Found" },
+                                label = { Text("Found Items") }
+                            )
+                        }
+                    }
+
+                    LazyColumn(
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            bottom = 20.dp
+                        ),
+                        verticalArrangement =
+                            Arrangement.spacedBy(12.dp)
+                    ) {
+                        val filtered = itemList.filter {
+                            it.status == selectedTab.uppercase() &&
+                            (category == "All" ||
+                                it.category == category) &&
+                            (it.title.contains(
+                                search,
+                                ignoreCase = true
+                            ) || it.description.contains(
+                                search,
+                                ignoreCase = true
+                            ))
+                        }
+
+                        items(filtered) { item ->
+                            ItemCard(
+                                item = item,
+                                onSolved = {
+                                    history = history + item
+                                    itemList = itemList - item
+                                }
+                            )
+                        }
+
+                        if (filtered.isEmpty()) {
+                            item {
+                                Text(
+                                    "No ${selectedTab.lowercase()} items found.",
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(20.dp)
+                                )
+                            }
                         }
                     }
                 }
+
+                "History" -> {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Solved History",
+                            fontSize = 25.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Blue
+                        )
+
+                        Spacer(Modifier.height(15.dp))
+
+                        if (history.isEmpty()) {
+                            Text(
+                                "No solved items yet.",
+                                color = Color.Gray
+                            )
+                        } else {
+                            history.forEach {
+                                ItemCard(it, onSolved = {})
+                            }
+                        }
+                    }
+                }
+
+                "Post" -> {
+                    PostScreen(
+                        onPost = { newItem ->
+                            itemList = itemList + newItem
+                            selectedTab = if (
+                                newItem.status == "LOST"
+                            ) "Lost" else "Found"
+                            selectedPage = "Home"
+                        }
+                    )
+                }
+
+                "Profile" -> {
+                    Column(
+                        Modifier.padding(20.dp)
+                    ) {
+                        Text(
+                            "My Profile",
+                            fontSize = 25.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Blue
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        Text("My Lost Items")
+                        Text("My Found Items")
+                        Text("My Solved History")
+                        Text("Privacy Settings")
+                        Text("Login / Logout")
+                        Spacer(Modifier.height(15.dp))
+                        Text(
+                            "Your phone number and personal details are private.",
+                            color = Color.Gray
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun ItemForm(
-    type: String,
-    onCancel: () -> Unit,
-    onSaved: () -> Unit
+fun ItemCard(
+    item: ItemData,
+    onSolved: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        )
+    ) {
+        Column(Modifier.padding(15.dp)) {
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween
+            ) {
+                Text(
+                    item.title,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Surface(
+                    color = if (item.status == "LOST")
+                        Color(0xFFFFE5E5)
+                    else Color(0xFFE0F5E8),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        item.status,
+                        modifier = Modifier.padding(7.dp),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(7.dp))
+
+            Text(item.description, color = Color.DarkGray)
+            Text(
+                "${item.college} • ${item.category}",
+                color = Color.Gray,
+                fontSize = 12.sp
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedButton(onClick = onSolved) {
+                Text("Mark as Solved")
+            }
+
+            Text(
+                "Personal contact details are hidden",
+                color = Color.Gray,
+                fontSize = 10.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun PostScreen(
+    onPost: (ItemData) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var college by remember { mutableStateOf("") }
-    var location by remember { mutableStateOf("") }
-    var contact by remember { mutableStateOf("") }
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var message by remember { mutableStateOf("") }
-    var saving by remember { mutableStateOf(false) }
-
-    val picker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        imageUri = uri
-    }
-
-    fun saveToFirestore(imageUrl: String) {
-        val user = FirebaseAuth.getInstance().currentUser
-
-        if (user == null) {
-            saving = false
-            message = "Please login again"
-            return
-        }
-
-        val data = hashMapOf(
-            "type" to type,
-            "title" to title.trim(),
-            "description" to description.trim(),
-            "college" to college.trim(),
-            "location" to location.trim(),
-            "contact" to contact.trim(),
-            "imageUrl" to imageUrl,
-            "userId" to user.uid,
-            "createdAt" to System.currentTimeMillis()
-        )
-
-        FirebaseFirestore.getInstance()
-            .collection("items")
-            .add(data)
-            .addOnSuccessListener {
-                saving = false
-                onSaved()
-            }
-            .addOnFailureListener {
-                saving = false
-                message = it.localizedMessage ?: "Could not save item"
-            }
-    }
+    var selectedStatus by remember { mutableStateOf("LOST") }
+    var selectedCategory by remember { mutableStateOf("Others") }
 
     Column(
-        modifier = Modifier.fillMaxWidth()
+        Modifier
+            .fillMaxSize()
+            .padding(20.dp)
     ) {
         Text(
-            "$type Item Details",
-            style = MaterialTheme.typography.headlineSmall
+            "Post an Item",
+            fontSize = 25.sp,
+            fontWeight = FontWeight.Bold,
+            color = Blue
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(15.dp))
 
         OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
+            title,
+            { title = it },
             label = { Text("Item Name") },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = description,
-            onValueChange = { description = it },
+            description,
+            { description = it },
             label = { Text("Description") },
             modifier = Modifier.fillMaxWidth()
         )
 
         OutlinedTextField(
-            value = college,
-            onValueChange = { college = it },
+            college,
+            { college = it },
             label = { Text("College Name") },
             modifier = Modifier.fillMaxWidth()
         )
 
-        OutlinedTextField(
-            value = location,
-            onValueChange = { location = it },
-            label = { Text("Location") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = contact,
-            onValueChange = { contact = it },
-            label = { Text("Contact Number") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
         Spacer(Modifier.height(10.dp))
 
-        OutlinedButton(
-            onClick = { picker.launch("image/*") },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (imageUri == null) "Choose Photo" else "Photo Selected")
+        Text("Select Item Type")
+
+        Row {
+            FilterChip(
+                selected = selectedStatus == "LOST",
+                onClick = { selectedStatus = "LOST" },
+                label = { Text("Lost") }
+            )
+
+            Spacer(Modifier.width(10.dp))
+
+            FilterChip(
+                selected = selectedStatus == "FOUND",
+                onClick = { selectedStatus = "FOUND" },
+                label = { Text("Found") }
+            )
         }
 
-        Text(message, color = MaterialTheme.colorScheme.error)
+        Text("Category")
 
-        Spacer(Modifier.height(10.dp))
+        Row {
+            listOf("Mobile", "Books", "ID Card", "Others")
+                .forEach { value ->
+                    FilterChip(
+                        selected = selectedCategory == value,
+                        onClick = { selectedCategory = value },
+                        label = { Text(value) }
+                    )
+                }
+        }
+
+        Spacer(Modifier.height(20.dp))
 
         Button(
-            enabled = !saving,
             onClick = {
                 if (
-                    title.isBlank() ||
-                    description.isBlank() ||
-                    college.isBlank() ||
-                    location.isBlank() ||
-                    contact.isBlank()
+                    title.isNotBlank() &&
+                    description.isNotBlank() &&
+                    college.isNotBlank()
                 ) {
-                    message = "Please fill all details"
-                } else {
-                    saving = true
-                    message = "Saving..."
-
-                    if (imageUri != null) {
-                        val reference = FirebaseStorage.getInstance()
-                            .reference
-                            .child("items/${UUID.randomUUID()}.jpg")
-
-                        reference.putFile(imageUri!!)
-                            .addOnSuccessListener {
-                                reference.downloadUrl
-                                    .addOnSuccessListener { uri ->
-                                        saveToFirestore(uri.toString())
-                                    }
-                                    .addOnFailureListener {
-                                        saving = false
-                                        message = "Photo link could not be created"
-                                    }
-                            }
-                            .addOnFailureListener {
-                                saving = false
-                                message = it.localizedMessage ?: "Photo upload failed"
-                            }
-                    } else {
-                        saveToFirestore("")
-                    }
+                    onPost(
+                        ItemData(
+                            title,
+                            description,
+                            college,
+                            selectedCategory,
+                            selectedStatus
+                        )
+                    )
                 }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (saving) "Saving..." else "Submit Item")
-        }
-
-        OutlinedButton(
-            onClick = onCancel,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Cancel")
+            Text("Publish Item")
         }
     }
 }
