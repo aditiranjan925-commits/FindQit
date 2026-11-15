@@ -1,13 +1,14 @@
 name: Build FindQit APK
 
 on:
- workflow_dispatch:
- push:
- branches: -main
+workflow_dispatch:
+push:
+branches:
+- main
 
 jobs:
- build:
-  runs-on: ubuntu-latest
+build:
+runs-on: ubuntu-latest
 
 steps:
   - name: Checkout code
