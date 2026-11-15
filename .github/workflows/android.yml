@@ -1,4 +1,4 @@
-./gradlew signingReport
+
 name: Build FindQit APK
 
 on:
@@ -37,6 +37,7 @@ jobs:
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
 
       - name: Build APK
+      ./gradlew signingReport
         run: gradle --no-daemon --max-workers=1 -Dorg.gradle.jvmargs="-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" assembleDebug
 
       - name: Upload APK
