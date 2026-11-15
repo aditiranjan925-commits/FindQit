@@ -1,6 +1,7 @@
 
 package com.aditi.lostfoundindia
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,7 +38,178 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun FindQitApp() {
+    val auth = remember { FirebaseAuth.getInstance() }
+    var loggedIn by remember {
+        mutableStateOf(auth.currentUser != null)
+    }
 
+    DisposableEffect(auth) {
+        val listener = FirebaseAuth.AuthStateListener {
+            loggedIn = it.currentUser != null
+        }
+        auth.addAuthStateListener(listener)
+
+        onDispose {
+            auth.removeAuthStateListener(listener)
+        }
+    }
+
+    if (loggedIn) {
+        FindQitMainContent()
+    } else {
+        PhoneLoginScreen()
+    }
+}
+
+@Composable
+fun PhoneLoginScreen() {
+    val context = LocalContext.current
+    val manager = remember { PhoneAuthManager() }
+
+    var phone by remember { mutableStateOf("") }
+    var otp by remember { mutableStateOf("") }
+    var verificationId by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF7F8FC))
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            "FindQit",
+            fontSize = 34.sp,
+            fontWeight = FontWeight.Bold,
+            color = Blue
+        )
+
+        Text(
+            "Find what you lost. Return what you found.",
+            color = Color.Gray
+        )
+
+        Spacer(Modifier.height(35.dp))
+
+        Text(
+            "Welcome!",
+            fontSize = 25.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            "Login with your mobile number",
+            color = Color.Gray
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        OutlinedTextField(
+            value = phone,
+            onValueChange = {
+                phone = it.filter { ch -> ch.isDigit() }.take(10)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Mobile Number") },
+            leadingIcon = { Text("+91") },
+            singleLine = true
+        )
+
+        Spacer(Modifier.height(15.dp))
+
+        if (verificationId.isNotBlank()) {
+            OutlinedTextField(
+                value = otp,
+                onValueChange = {
+                    otp = it.filter { ch -> ch.isDigit() }.take(6)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Enter OTP") },
+                singleLine = true
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = {
+                    if (otp.length == 6) {
+                        loading = true
+                        manager.verifyOtp(
+                            verificationId = verificationId,
+                            otp = otp,
+                            onSuccess = {
+                                loading = false
+                                message = "Login successful!"
+                            },
+                            onError = {
+                                loading = false
+                                message = it
+                            }
+                        )
+                    } else {
+                        message = "Enter a valid 6-digit OTP"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !loading
+            ) {
+                Text(if (loading) "Verifying..." else "Verify OTP")
+            }
+        } else {
+            Button(
+                onClick = {
+                    if (phone.length == 10) {
+                        loading = true
+                        message = ""
+
+                        manager.sendOtp(
+                            activity = context as Activity,
+                            phoneNumber = "+91$phone",
+                            onCodeSent = { id ->
+                                verificationId = id
+                                loading = false
+                                message = "OTP sent successfully"
+                            },
+                            onError = { error ->
+                                loading = false
+                                message = error
+                            }
+                        )
+                    } else {
+                        message = "Enter a valid 10-digit number"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !loading
+            ) {
+                Text(if (loading) "Sending OTP..." else "Send OTP")
+            }
+        }
+
+        if (message.isNotBlank()) {
+            Spacer(Modifier.height(15.dp))
+            Text(
+                message,
+                color = if (message.contains("successful", true) ||
+                    message.contains("sent", true)
+                ) Color(0xFF168447) else Color.Red
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        Text(
+            "Your phone number will not be displayed publicly.",
+            color = Color.Gray,
+            fontSize = 12.sp
+        )
+    }
+}
+
+@Composable
+fun FindQitMainContent() {
     val repository = remember { FirebaseRepository() }
 
     var selectedTab by remember { mutableStateOf("Lost") }
@@ -54,9 +227,7 @@ fun FindQitApp() {
 
     var message by remember { mutableStateOf("") }
 
-    // Connect to Firestore
     DisposableEffect(repository) {
-
         val activeListener = repository.observeActiveItems(
             onData = { activeItems = it },
             onError = { message = it }
@@ -79,7 +250,6 @@ fun FindQitApp() {
                 listOf(
                     "Home", "Search", "Post", "History", "Profile"
                 ).forEach { page ->
-
                     NavigationBarItem(
                         selected = selectedPage == page,
                         onClick = { selectedPage = page },
@@ -120,11 +290,9 @@ fun FindQitApp() {
             when (selectedPage) {
 
                 "Home", "Search" -> {
-
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
-
                         Text(
                             "FindQit",
                             fontSize = 29.sp,
@@ -188,7 +356,6 @@ fun FindQitApp() {
                                 "All", "Mobile", "Books",
                                 "ID Card", "Others"
                             ).forEach { name ->
-
                                 Surface(
                                     color = if (category == name)
                                         Blue else Color.White,
@@ -254,17 +421,14 @@ fun FindQitApp() {
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-
                         items(
                             items = filtered,
                             key = { it.id }
                         ) { item ->
-
                             ItemCard(
                                 item = item,
                                 showSolvedButton = true,
                                 onSolved = {
-
                                     repository.markSolved(
                                         itemId = item.id,
                                         onSuccess = {
@@ -291,9 +455,7 @@ fun FindQitApp() {
                 }
 
                 "History" -> {
-
                     Column(Modifier.padding(16.dp)) {
-
                         Text(
                             "Solved History",
                             fontSize = 25.sp,
@@ -326,7 +488,6 @@ fun FindQitApp() {
                 }
 
                 "Post" -> {
-
                     PostScreen(
                         onPost = { title, description, college,
                                    categoryValue, status ->
@@ -337,7 +498,6 @@ fun FindQitApp() {
                                 college = college,
                                 category = categoryValue,
                                 status = status,
-
                                 onSuccess = {
                                     selectedTab =
                                         if (status == "LOST") "Lost" else "Found"
@@ -345,7 +505,6 @@ fun FindQitApp() {
                                     message = "Item posted successfully!"
                                     selectedPage = "Home"
                                 },
-
                                 onError = {
                                     message = it
                                 }
@@ -355,11 +514,7 @@ fun FindQitApp() {
                 }
 
                 "Profile" -> {
-
-                    Column(
-                        Modifier.padding(20.dp)
-                    ) {
-
+                    Column(Modifier.padding(20.dp)) {
                         Text(
                             "My Profile",
                             fontSize = 25.sp,
@@ -373,14 +528,24 @@ fun FindQitApp() {
                         Text("My Found Items")
                         Text("My Solved History")
                         Text("Privacy Settings")
-                        Text("Login / Logout")
 
-                        Spacer(Modifier.height(15.dp))
+                        Spacer(Modifier.height(20.dp))
 
                         Text(
                             "Your personal contact details are private.",
                             color = Color.Gray
                         )
+
+                        Spacer(Modifier.height(20.dp))
+
+                        Button(
+                            onClick = {
+                                FirebaseAuth.getInstance().signOut()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Logout")
+                        }
                     }
                 }
             }
@@ -394,7 +559,6 @@ fun ItemCard(
     showSolvedButton: Boolean,
     onSolved: () -> Unit
 ) {
-
     val currentUid = FirebaseAuth.getInstance().currentUser?.uid
     val isOwner = currentUid != null && item.ownerId == currentUid
 
@@ -405,14 +569,11 @@ fun ItemCard(
             containerColor = Color.White
         )
     ) {
-
         Column(Modifier.padding(15.dp)) {
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-
                 Text(
                     item.title,
                     fontSize = 17.sp,
@@ -469,7 +630,6 @@ fun PostScreen(
         String, String, String, String, String
     ) -> Unit
 ) {
-
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var college by remember { mutableStateOf("") }
@@ -481,7 +641,6 @@ fun PostScreen(
             .fillMaxSize()
             .padding(20.dp)
     ) {
-
         Text(
             "Post an Item",
             fontSize = 25.sp,
@@ -539,7 +698,6 @@ fun PostScreen(
         Column {
             listOf("Mobile", "Books", "ID Card", "Others")
                 .forEach { value ->
-
                     FilterChip(
                         selected = selectedCategory == value,
                         onClick = { selectedCategory = value },
