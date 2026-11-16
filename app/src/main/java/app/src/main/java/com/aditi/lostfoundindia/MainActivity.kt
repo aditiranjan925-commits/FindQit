@@ -23,7 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
-
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 private val Blue = Color(0xFF2457C5)
 
 class MainActivity : ComponentActivity() {
@@ -102,12 +103,20 @@ fun PhoneLoginScreen() {
             .padding(24.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            "FindQit",
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Bold,
-            color = Blue
-        )
+        Image(
+    painter = painterResource(
+        id = R.drawable.findqit_logo
+    ),
+    contentDescription = "FindQit Logo",
+    modifier = Modifier.size(100.dp)
+)
+
+Text(
+    "FindQit",
+    fontSize = 30.sp,
+    fontWeight = FontWeight.Bold,
+    color = Blue
+)
 
         Text(
             "Find what you lost. Return what you found.",
@@ -317,12 +326,26 @@ fun FindQitMainContent(college: CollegeOption) {
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
-                        Text(
-                            "FindQit",
-                            fontSize = 29.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Blue
-                        )
+                        Row(
+    verticalAlignment = Alignment.CenterVertically
+) {
+    Image(
+        painter = painterResource(
+            id = R.drawable.findqit_logo
+        ),
+        contentDescription = "FindQit Logo",
+        modifier = Modifier.size(55.dp)
+    )
+
+    Spacer(Modifier.width(10.dp))
+
+    Text(
+        "FindQit",
+        fontSize = 29.sp,
+        fontWeight = FontWeight.Bold,
+        color = Blue
+    )
+}
 
                         Text(
                             "Find what you lost. Return what you found.",
@@ -360,7 +383,7 @@ fun FindQitMainContent(college: CollegeOption) {
                             modifier = Modifier.fillMaxWidth(),
                             placeholder = {
                                 Text("Search mobile, books, ID card...")
-                            },
+                            }, 
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.Search,
