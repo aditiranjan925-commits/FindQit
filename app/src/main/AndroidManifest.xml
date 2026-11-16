@@ -6,6 +6,7 @@
 
     <application
         android:label="FindQit"
+        android:icon="@drawable/findqit_logo"
         android:allowBackup="true"
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
