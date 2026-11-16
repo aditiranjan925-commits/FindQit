@@ -65,11 +65,11 @@ fun CollegeSelectionScreen(
                             CollegeOption(
                                 name = name,
                                 district = document
-                                    .getString("districtName")
+                                    .getString("district")
                                     ?.trim()
                                     .orEmpty(),
                                 state = document
-                                    .getString("stateName")
+                                    .getString("state")
                                     ?.trim()
                                     .orEmpty()
                             )
