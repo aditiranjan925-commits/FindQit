@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.firestore.FirebaseFirestore
 
 private val CollegeBlue = Color(0xFF2457C5)
 
@@ -37,48 +38,71 @@ fun CollegeSelectionScreen(
     var selectedCollege by remember {
         mutableStateOf<CollegeOption?>(null)
     }
+    var colleges by remember {
+        mutableStateOf<List<CollegeOption>>(emptyList())
+    }
+    var loading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf("") }
 
-    // Temporary sample data.
-    // Later this will be connected to Firestore.
-    val sampleColleges = remember {
-        listOf(
-            CollegeOption(
-                "Institute of Engineering and Management",
-                "Kolkata",
-                "West Bengal"
-            ),
-            CollegeOption(
-                "Jadavpur University",
-                "Kolkata",
-                "West Bengal"
-            ),
-            CollegeOption(
-                "University of Calcutta",
-                "Kolkata",
-                "West Bengal"
-            ),
-            CollegeOption(
-                "IIT Kharagpur",
-                "Paschim Medinipur",
-                "West Bengal"
-            ),
-            CollegeOption(
-                "Delhi Technological University",
-                "Delhi",
-                "Delhi"
-            ),
-            CollegeOption(
-                "IIT Bombay",
-                "Mumbai",
-                "Maharashtra"
-            )
-        )
+    // Load colleges from Firebase Firestore
+    LaunchedEffect(Unit) {
+        FirebaseFirestore.getInstance()
+            .collection("colleges")
+            .get()
+            .addOnSuccessListener { snapshot ->
+
+                colleges = snapshot.documents
+                    .mapNotNull { document ->
+
+                        val name = document
+                            .getString("name")
+                            ?.trim()
+                            .orEmpty()
+
+                        if (name.isBlank()) {
+                            null
+                        } else {
+                            CollegeOption(
+                                name = name,
+                                district = document
+                                    .getString("districtName")
+                                    ?.trim()
+                                    .orEmpty(),
+                                state = document
+                                    .getString("stateName")
+                                    ?.trim()
+                                    .orEmpty()
+                            )
+                        }
+                    }
+                    .distinctBy {
+                        "${it.name.lowercase()}|${it.district.lowercase()}|${it.state.lowercase()}"
+                    }
+                    .sortedBy { it.name.lowercase() }
+
+                loading = false
+                errorMessage = ""
+            }
+            .addOnFailureListener { error ->
+                loading = false
+                errorMessage = error.localizedMessage
+                    ?: "Unable to load colleges"
+            }
     }
 
-    val filteredColleges = sampleColleges.filter {
-        it.name.contains(search, ignoreCase = true) ||
-        it.district.contains(search, ignoreCase = true) ||
-        it.state.contains(search, ignoreCase = true)
+    // Search by college name, district or state
+    val filteredColleges = remember(colleges, search) {
+        val query = search.trim()
+
+        if (query.isBlank()) {
+            colleges
+        } else {
+            colleges.filter {
+                it.name.contains(query, ignoreCase = true) ||
+                it.district.contains(query, ignoreCase = true) ||
+                it.state.contains(query, ignoreCase = true)
+            }
+        }
     }
 
     Column(
@@ -87,6 +111,7 @@ fun CollegeSelectionScreen(
             .background(Color(0xFFF7F8FC))
             .padding(20.dp)
     ) {
+
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -145,76 +170,129 @@ fun CollegeSelectionScreen(
         Spacer(Modifier.height(18.dp))
 
         Text(
-            "Suggested Colleges",
+            if (loading) "Loading colleges..."
+            else "Colleges (${filteredColleges.size})",
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
 
         Spacer(Modifier.height(12.dp))
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(filteredColleges) { college ->
-                Card(
+        when {
+
+            loading -> {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            selectedCollege = college
-                        },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (
-                            selectedCollege == college
-                        ) Color(0xFFE8EFFF)
-                        else Color.White
-                    )
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier.padding(15.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = CollegeBlue
-                        )
-
-                        Spacer(Modifier.width(12.dp))
-
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                college.name,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Text(
-                                "${college.district}, ${college.state}",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        RadioButton(
-                            selected = selectedCollege == college,
-                            onClick = {
-                                selectedCollege = college
-                            }
-                        )
-                    }
+                    CircularProgressIndicator(
+                        color = CollegeBlue
+                    )
                 }
             }
 
-            if (filteredColleges.isEmpty()) {
-                item {
+            errorMessage.isNotBlank() -> {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        "No matching college found.",
-                        color = Color.Gray,
-                        modifier = Modifier.padding(15.dp)
+                        errorMessage,
+                        color = Color.Red
                     )
+                }
+            }
+
+            filteredColleges.isEmpty() -> {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (colleges.isEmpty())
+                            "No colleges available"
+                        else
+                            "No matching college found.",
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(
+                        filteredColleges,
+                        key = {
+                            "${it.name}|${it.district}|${it.state}"
+                        }
+                    ) { college ->
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedCollege = college
+                                },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor =
+                                    if (selectedCollege == college)
+                                        Color(0xFFE8EFFF)
+                                    else
+                                        Color.White
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(15.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+
+                                Icon(
+                                    Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = CollegeBlue
+                                )
+
+                                Spacer(Modifier.width(12.dp))
+
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        college.name,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    Text(
+                                        listOf(
+                                            college.district,
+                                            college.state
+                                        )
+                                            .filter { it.isNotBlank() }
+                                            .joinToString(", "),
+                                        color = Color.Gray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                RadioButton(
+                                    selected = selectedCollege == college,
+                                    onClick = {
+                                        selectedCollege = college
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -227,7 +305,7 @@ fun CollegeSelectionScreen(
                     onCollegeSelected(it)
                 }
             },
-            enabled = selectedCollege != null,
+            enabled = selectedCollege != null && !loading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
