@@ -283,7 +283,7 @@ fun FindQitMainContent(college: CollegeOption) {
                                     "Home" -> Icons.Default.Home
                                     "Search" -> Icons.Default.Search
                                     "Post" -> Icons.Default.AddCircle
-                                    "History" -> Icons.Default.History
+                                    "History" -> Icons.Default.Home
                                     else -> Icons.Default.Person
                                 },
                                 contentDescription = page
