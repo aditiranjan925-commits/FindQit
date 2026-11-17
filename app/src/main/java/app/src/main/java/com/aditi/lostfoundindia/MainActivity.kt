@@ -706,20 +706,18 @@ fun FindQitMainContent(
 
                         Text("College: ${college.name}") 
                         Text("${college.district}, ${college.state}")
-Spacer(Modifier.height(15.dp))
-OutlinedButton(
-    onClick = onChangeCollege,
-    modifier = Modifier.fillMaxWidth()
-) {
-    Icon(
-        Icons.Default.School,
-        contentDescription = null
-    )
-    Spacer(Modifier.width(8.dp))
-    Text("Change College")
-}
-                        
-                        
+                        Spacer(Modifier.height(15.dp))
+                        OutlinedButton(
+                           onClick = onChangeCollege,
+                           modifier = Modifier.fillMaxWidth()
+                         ) {
+                          Icon(
+                             Icons.Default.School,
+                               contentDescription = null
+                            )
+                                 Spacer(Modifier.width(8.dp))
+                                  Text("Change College")
+                            }
                         Spacer(Modifier.height(20.dp))
 
                         Text("My Lost Items")
