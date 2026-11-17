@@ -1,6 +1,9 @@
 
 package com.aditi.lostfoundindia
 
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.FirebaseFirestore
 import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -41,6 +44,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun FindQitApp() {
     val auth = remember { FirebaseAuth.getInstance() }
+    val db = remember { FirebaseFirestore.getInstance() }
 
     var loggedIn by remember {
         mutableStateOf(auth.currentUser != null)
@@ -50,12 +54,56 @@ fun FindQitApp() {
         mutableStateOf<CollegeOption?>(null)
     }
 
-    DisposableEffect(auth) {
-        val listener = FirebaseAuth.AuthStateListener {
-            loggedIn = it.currentUser != null
+    var loadingCollege by remember {
+        mutableStateOf(auth.currentUser != null)
+    }
 
-            if (it.currentUser == null) {
+    var collegeError by remember {
+        mutableStateOf("")
+    }
+
+    // Login/logout and saved college listener
+    DisposableEffect(auth) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+
+            val user = firebaseAuth.currentUser
+
+            loggedIn = user != null
+
+            if (user == null) {
                 selectedCollege = null
+                loadingCollege = false
+                collegeError = ""
+            } else {
+                loadingCollege = true
+
+                db.collection("users")
+                    .document(user.uid)
+                    .get()
+                    .addOnSuccessListener { document ->
+
+                        val name = document
+                            .getString("collegeName")
+                            .orEmpty()
+
+                        if (name.isNotBlank()) {
+                            selectedCollege = CollegeOption(
+                                name = name,
+                                district = document.getString("collegeDistrict").orEmpty(),
+                                state = document.getString("collegeState").orEmpty()
+                            )
+                        } else {
+                            selectedCollege = null
+                        }
+
+                        loadingCollege = false
+                    }
+                    .addOnFailureListener { error ->
+                        collegeError = error.localizedMessage
+                            ?: "Unable to load saved college"
+
+                        loadingCollege = false
+                    }
             }
         }
 
@@ -67,19 +115,93 @@ fun FindQitApp() {
     }
 
     when {
-        !loggedIn -> PhoneLoginScreen()
+        !loggedIn -> {
+            PhoneLoginScreen()
+        }
+
+        loadingCollege -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFFF7F8FC)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = Blue)
+            }
+        }
 
         selectedCollege == null -> {
-            CollegeSelectionScreen(
-                onCollegeSelected = {
-                    selectedCollege = it
+            Column {
+                if (collegeError.isNotBlank()) {
+                    Text(
+                        collegeError,
+                        color = Color.Red,
+                        modifier = Modifier.padding(12.dp)
+                    )
                 }
-            )
+
+                CollegeSelectionScreen(
+                    onCollegeSelected = { college ->
+
+                        val uid = auth.currentUser?.uid
+
+                        if (uid != null) {
+                            db.collection("users")
+                                .document(uid)
+                                .set(
+                                    mapOf(
+                                        "collegeName" to college.name,
+                                        "collegeDistrict" to college.district,
+                                        "collegeState" to college.state,
+                                        "collegeUpdatedAt" to
+                                            com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                    ),
+                                    com.google.firebase.firestore.SetOptions.merge()
+                                )
+                                .addOnSuccessListener {
+                                    selectedCollege = college
+                                    collegeError = ""
+                                }
+                                .addOnFailureListener { error ->
+                                    collegeError = error.localizedMessage
+                                        ?: "College could not be saved"
+                                }
+                        }
+                    }
+                )
+            }
         }
 
         else -> {
             FindQitMainContent(
-                college = selectedCollege!!
+                college = selectedCollege!!,
+                onChangeCollege = {
+
+                    val uid = auth.currentUser?.uid
+
+                    if (uid != null) {
+                        db.collection("users")
+                            .document(uid)
+                            .update(
+                                mapOf(
+                                    "collegeName" to
+                                        com.google.firebase.firestore.FieldValue.delete(),
+                                    "collegeDistrict" to
+                                        com.google.firebase.firestore.FieldValue.delete(),
+                                    "collegeState" to
+                                        com.google.firebase.firestore.FieldValue.delete()
+                                )
+                            )
+                            .addOnSuccessListener {
+                                selectedCollege = null
+                                collegeError = ""
+                            }
+                            .addOnFailureListener { error ->
+                                collegeError = error.localizedMessage
+                                    ?: "Unable to change college"
+                            }
+                    }
+                }
             )
         }
     }
@@ -242,7 +364,11 @@ Text(
 }
 
 @Composable
-fun FindQitMainContent(college: CollegeOption) {
+
+fun FindQitMainContent(
+    college: CollegeOption,
+    onChangeCollege: () -> Unit
+) {
     val repository = remember { FirebaseRepository() }
 
     var selectedTab by remember { mutableStateOf("Lost") }
@@ -410,7 +536,7 @@ fun FindQitMainContent(college: CollegeOption) {
                         ) {
                             listOf(
                                 "All", "Mobile", "Books",
-                                "ID Card", "Others"
+                                "ID Card", "Others", " Notebooks", "keys", " Electronic items"
                             ).forEach { name ->
                                 Surface(
                                     color = if (category == name)
@@ -578,9 +704,22 @@ fun FindQitMainContent(college: CollegeOption) {
 
                         Spacer(Modifier.height(20.dp))
 
-                        Text("College: ${college.name}")
+                        Text("College: ${college.name}") 
                         Text("${college.district}, ${college.state}")
-
+Spacer(Modifier.height(15.dp))
+OutlinedButton(
+    onClick = onChangeCollege,
+    modifier = Modifier.fillMaxWidth()
+) {
+    Icon(
+        Icons.Default.School,
+        contentDescription = null
+    )
+    Spacer(Modifier.width(8.dp))
+    Text("Change College")
+}
+                        
+                        
                         Spacer(Modifier.height(20.dp))
 
                         Text("My Lost Items")
@@ -754,7 +893,7 @@ fun PostScreen(
         Text("Category")
 
         Column {
-            listOf("Mobile", "Books", "ID Card", "Others")
+            listOf("Mobile", "Books", "ID Card", "Others"," Electronic items","Notebooks")
                 .forEach { value ->
                     FilterChip(
                         selected = selectedCategory == value,
