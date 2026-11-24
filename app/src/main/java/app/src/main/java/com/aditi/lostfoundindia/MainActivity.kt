@@ -846,12 +846,7 @@ fun ItemCard(
     }
 }
 
-@Composable
-fun PostScreen(
-    collegeName: String,
-    onPosted: () -> Unit,
-    onError: (String) -> Unit
-) {
+{
     val repository = remember { FirebaseRepository() }
 
     var title by remember { mutableStateOf("") }
@@ -964,9 +959,116 @@ fun PostScreen(
                 categories.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(option) },
+
+
+@Composable
+fun PostScreen(
+    collegeName: String,
+    onPosted: () -> Unit,
+    onError: (String) -> Unit
+) {
+    val repository = remember { FirebaseRepository() }
+    val storage = remember { FirebaseStorage.getInstance() }
+    val auth = remember { FirebaseAuth.getInstance() }
+
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("Electronics") }
+    var status by remember { mutableStateOf("LOST") }
+    var selectedImage by remember { mutableStateOf<Uri?>(null) }
+    var loading by remember { mutableStateOf(false) }
+
+    val categories = listOf(
+        "Electronics", "Documents", "ID Card",
+        "Wallet", "Keys", "Books", "Bags",
+        "Clothing", "Others"
+    )
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        selectedImage = uri
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(18.dp)
+    ) {
+        Text(
+            "Post an Item",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            "Share details about your lost or found item.",
+            color = Color.Gray,
+            fontSize = 12.sp
+        )
+
+        Spacer(Modifier.height(15.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = status == "LOST",
+                onClick = { status = "LOST" },
+                label = { Text("I Lost Something") }
+            )
+
+            FilterChip(
+                selected = status == "FOUND",
+                onClick = { status = "FOUND" },
+                label = { Text("I Found Something") }
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = title,
+            onValueChange = { title = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Item Name") },
+            singleLine = true
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = description,
+            onValueChange = { description = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Description and Location") },
+            minLines = 3
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Text("Category", fontWeight = FontWeight.Bold)
+
+        var expanded by remember { mutableStateOf(false) }
+
+        Box {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(category)
+            }
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                categories.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option) },
                         onClick = {
                             category = option
-                            categoryExpanded = false
+                            expanded = false
                         }
                     )
                 }
@@ -975,32 +1077,60 @@ fun PostScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        Text(
-            "College",
-            fontWeight = FontWeight.Bold
-        )
+        Text("College: $collegeName", color = Color.Gray)
 
-        Text(
-            collegeName,
-            color = Color.Gray
-        )
+        Spacer(Modifier.height(12.dp))
 
-        Spacer(Modifier.height(20.dp))
+        OutlinedButton(
+            onClick = { imagePicker.launch("image/*") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                if (selectedImage == null)
+                    "Select Item Photo"
+                else
+                    "Change Selected Photo"
+            )
+        }
+
+        selectedImage?.let { uri ->
+            Spacer(Modifier.height(10.dp))
+
+            AsyncImage(
+                model = uri,
+                contentDescription = "Selected item photo",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(190.dp)
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
 
         Button(
             onClick = {
                 if (title.isBlank() || description.isBlank()) {
                     onError("Please enter item name and description.")
-                } else {
-                    loading = true
+                    return@Button
+                }
 
+                val uid = auth.currentUser?.uid
+
+                if (uid == null) {
+                    onError("Please login again.")
+                    return@Button
+                }
+
+                loading = true
+
+                fun saveItem(imageUrl: String) {
                     repository.postItem(
                         title = title.trim(),
                         description = description.trim(),
                         college = collegeName,
                         category = category,
                         status = status,
-                        imageUrl = "",
+                        imageUrl = imageUrl,
                         onSuccess = {
                             loading = false
                             onPosted()
@@ -1011,13 +1141,44 @@ fun PostScreen(
                         }
                     )
                 }
+
+                val imageUri = selectedImage
+
+                if (imageUri == null) {
+                    saveItem("")
+                } else {
+                    val imageRef = storage.reference
+                        .child("item_images/$uid/${UUID.randomUUID()}.jpg")
+
+                    imageRef.putFile(imageUri)
+                        .addOnSuccessListener {
+                            imageRef.downloadUrl
+                                .addOnSuccessListener { downloadUri ->
+                                    saveItem(downloadUri.toString())
+                                }
+                                .addOnFailureListener { error ->
+                                    loading = false
+                                    onError(
+                                        error.message ?: "Could not get photo URL"
+                                    )
+                                }
+                        }
+                        .addOnFailureListener { error ->
+                            loading = false
+                            onError(
+                                error.message ?: "Photo upload failed"
+                            )
+                        }
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
             enabled = !loading
         ) {
-            Text(if (loading) "Posting..." else "Publish Item")
+            Text(
+                if (loading) "Uploading..." else "Publish Item"
+            )
         }
     }
 }
