@@ -9,7 +9,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -394,8 +393,9 @@ fun FindQitMainContent(
     val auth = remember { FirebaseAuth.getInstance() }
     val chatRepository = remember { ChatRepository() }
 
-var selectedChatId by remember { mutableStateOf("") }
-var selectedChatTitle by remember { mutableStateOf("") }
+    var selectedChatId by remember { mutableStateOf("") }
+    var selectedChatTitle by remember { mutableStateOf("") }
+
     var activeItems by remember {
         mutableStateOf<List<FindQitItem>>(emptyList())
     }
@@ -492,6 +492,7 @@ var selectedChatTitle by remember { mutableStateOf("") }
                     "Home",
                     "Search",
                     "Post",
+                    "Chats",
                     "History",
                     "Profile"
                 )
@@ -512,7 +513,7 @@ var selectedChatTitle by remember { mutableStateOf("") }
                                     "Chats" -> "💬"
                                     "History" -> "◷"
                                     else -> "○"
-                                }
+                                },
                                 fontSize = 21.sp
                             )
                         },
@@ -576,7 +577,6 @@ var selectedChatTitle by remember { mutableStateOf("") }
             when (selectedPage) {
                 "Home", "Search" -> {
                     ItemListScreen(
-                        onOpenChat: (FindQitItem) -> Unit
                         page = selectedPage,
                         items = visibleItems,
                         loading = loading,
@@ -595,6 +595,19 @@ var selectedChatTitle by remember { mutableStateOf("") }
                                     notice = it
                                 }
                             )
+                        },
+                        onOpenChat = { item ->
+                            chatRepository.openChat(
+                                item = item,
+                                onSuccess = { chatId ->
+                                    selectedChatId = chatId
+                                    selectedChatTitle = item.title
+                                    selectedPage = "ChatRoom"
+                                },
+                                onError = {
+                                    notice = it
+                                }
+                            )
                         }
                     )
                 }
@@ -608,6 +621,26 @@ var selectedChatTitle by remember { mutableStateOf("") }
                         },
                         onError = {
                             notice = it
+                        }
+                    )
+                }
+
+                "Chats" -> {
+                    ChatInboxScreen(
+                        onOpenChat = { chatId, title ->
+                            selectedChatId = chatId
+                            selectedChatTitle = title
+                            selectedPage = "ChatRoom"
+                        }
+                    )
+                }
+
+                "ChatRoom" -> {
+                    PrivateChatScreen(
+                        chatId = selectedChatId,
+                        itemTitle = selectedChatTitle,
+                        onBack = {
+                            selectedPage = "Chats"
                         }
                     )
                 }
@@ -677,19 +710,6 @@ var selectedChatTitle by remember { mutableStateOf("") }
 
 @Composable
 fun ItemListScreen(
-    onOpenChat = { item ->
-    chatRepository.openChat(
-        item = item,
-        onSuccess = { chatId ->
-            selectedChatId = chatId
-            selectedChatTitle = item.title
-            selectedPage = "ChatRoom"
-        },
-        onError = {
-            notice = it
-        }
-    )
-}
     page: String,
     items: List<FindQitItem>,
     loading: Boolean,
@@ -698,7 +718,8 @@ fun ItemListScreen(
     onSearchChange: (String) -> Unit,
     selectedFilter: String,
     onFilterChange: (String) -> Unit,
-    onMarkSolved: (FindQitItem) -> Unit
+    onMarkSolved: (FindQitItem) -> Unit,
+    onOpenChat: (FindQitItem) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -796,6 +817,9 @@ fun ItemListScreen(
                             item = item,
                             onMarkSolved = {
                                 onMarkSolved(item)
+                            },
+                            onChat = {
+                                onOpenChat(item)
                             }
                         )
                     }
@@ -811,12 +835,9 @@ fun ItemListScreen(
 
 @Composable
 fun ItemCard(
-    onChat = {
-    onOpenChat(item)
-}
-    onChat: () -> Unit
     item: FindQitItem,
-    onMarkSolved: () -> Unit
+    onMarkSolved: () -> Unit,
+    onChat: () -> Unit = {}
 ) {
     val currentUid = FirebaseAuth.getInstance().currentUser?.uid
     val isOwner = item.ownerId == currentUid
@@ -914,6 +935,17 @@ fun ItemCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Mark as Solved")
+                }
+            }
+
+            if (!isOwner && item.status != "SOLVED") {
+                Spacer(Modifier.height(12.dp))
+
+                Button(
+                    onClick = onChat,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("💬 Chat with Owner")
                 }
             }
         }
