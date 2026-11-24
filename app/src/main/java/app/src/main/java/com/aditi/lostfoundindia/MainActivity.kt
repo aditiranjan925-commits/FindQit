@@ -5,13 +5,13 @@ import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -21,14 +21,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 
 private val Blue = Color(0xFF2457C5)
@@ -50,18 +49,9 @@ fun FindQitApp() {
     val auth = remember { FirebaseAuth.getInstance() }
     val db = remember { FirebaseFirestore.getInstance() }
 
-    var loggedIn by remember {
-        mutableStateOf(auth.currentUser != null)
-    }
-
-    var selectedCollege by remember {
-        mutableStateOf<CollegeOption?>(null)
-    }
-
-    var loading by remember {
-        mutableStateOf(auth.currentUser != null)
-    }
-
+    var loggedIn by remember { mutableStateOf(auth.currentUser != null) }
+    var selectedCollege by remember { mutableStateOf<CollegeOption?>(null) }
+    var loading by remember { mutableStateOf(auth.currentUser != null) }
     var error by remember { mutableStateOf("") }
 
     DisposableEffect(auth) {
@@ -75,10 +65,7 @@ fun FindQitApp() {
                 error = ""
             } else {
                 loading = true
-
-                db.collection("users")
-                    .document(user.uid)
-                    .get()
+                db.collection("users").document(user.uid).get()
                     .addOnSuccessListener { doc ->
                         val name = doc.getString("collegeName").orEmpty()
 
@@ -91,7 +78,6 @@ fun FindQitApp() {
                         } else {
                             null
                         }
-
                         loading = false
                     }
                     .addOnFailureListener {
@@ -102,10 +88,7 @@ fun FindQitApp() {
         }
 
         auth.addAuthStateListener(listener)
-
-        onDispose {
-            auth.removeAuthStateListener(listener)
-        }
+        onDispose { auth.removeAuthStateListener(listener) }
     }
 
     when {
@@ -126,12 +109,12 @@ fun FindQitApp() {
                     Text(error, color = Color.Red)
                 }
 
-                CollegeSelectionScreen { college ->
+                // FIX: named callback argument
+                CollegeSelectionScreen(onCollegeSelected = { college ->
                     val uid = auth.currentUser?.uid
 
                     if (uid != null) {
-                        db.collection("users")
-                            .document(uid)
+                        db.collection("users").document(uid)
                             .set(
                                 mapOf(
                                     "collegeName" to college.name,
@@ -149,7 +132,7 @@ fun FindQitApp() {
                                 error = it.localizedMessage ?: "College save failed"
                             }
                     }
-                }
+                })
             }
         }
 
@@ -160,8 +143,7 @@ fun FindQitApp() {
                     val uid = auth.currentUser?.uid
 
                     if (uid != null) {
-                        db.collection("users")
-                            .document(uid)
+                        db.collection("users").document(uid)
                             .update(
                                 mapOf(
                                     "collegeName" to FieldValue.delete(),
@@ -213,7 +195,6 @@ fun PhoneLoginScreen() {
             fontWeight = FontWeight.Bold,
             color = Blue
         )
-
         Text(
             "Find what you lost. Return what you found.",
             color = Color.Gray
@@ -221,12 +202,7 @@ fun PhoneLoginScreen() {
 
         Spacer(Modifier.height(30.dp))
 
-        Text(
-            "Welcome!",
-            fontSize = 25.sp,
-            fontWeight = FontWeight.Bold
-        )
-
+        Text("Welcome!", fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("Login with your mobile number", color = Color.Gray)
 
         Spacer(Modifier.height(20.dp))
@@ -234,7 +210,7 @@ fun PhoneLoginScreen() {
         OutlinedTextField(
             value = phone,
             onValueChange = {
-                phone = it.filter { ch -> ch.isDigit() }.take(10)
+                phone = it.filter(Char::isDigit).take(10)
             },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Mobile Number") },
@@ -248,7 +224,7 @@ fun PhoneLoginScreen() {
             OutlinedTextField(
                 value = otp,
                 onValueChange = {
-                    otp = it.filter { ch -> ch.isDigit() }.take(6)
+                    otp = it.filter(Char::isDigit).take(6)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Enter OTP") },
@@ -261,7 +237,6 @@ fun PhoneLoginScreen() {
                 onClick = {
                     if (otp.length == 6) {
                         loading = true
-
                         manager.verifyOtp(
                             verificationId = verificationId,
                             otp = otp,
@@ -289,7 +264,6 @@ fun PhoneLoginScreen() {
                     if (phone.length == 10) {
                         loading = true
                         message = ""
-
                         manager.sendOtp(
                             activity = context as Activity,
                             phoneNumber = "+91$phone",
@@ -326,7 +300,6 @@ fun PhoneLoginScreen() {
         }
 
         Spacer(Modifier.height(20.dp))
-
         Text(
             "Your phone number will not be displayed publicly.",
             color = Color.Gray,
@@ -347,18 +320,9 @@ fun FindQitMainContent(
     var search by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("All") }
 
-    var activeItems by remember {
-        mutableStateOf<List<FindQitItem>>(emptyList())
-    }
-
-    var history by remember {
-        mutableStateOf<List<FindQitItem>>(emptyList())
-    }
-
-    var myItems by remember {
-        mutableStateOf<List<FindQitItem>>(emptyList())
-    }
-
+    var activeItems by remember { mutableStateOf<List<FindQitItem>>(emptyList()) }
+    var history by remember { mutableStateOf<List<FindQitItem>>(emptyList()) }
+    var myItems by remember { mutableStateOf<List<FindQitItem>>(emptyList()) }
     var message by remember { mutableStateOf("") }
 
     DisposableEffect(repository) {
@@ -366,12 +330,10 @@ fun FindQitMainContent(
             onData = { activeItems = it },
             onError = { message = it }
         )
-
         val historyListener = repository.observeSolvedHistory(
             onData = { history = it },
             onError = { message = it }
         )
-
         val myItemsListener = repository.observeMyItems(
             onData = { myItems = it },
             onError = { message = it }
@@ -392,10 +354,7 @@ fun FindQitMainContent(
     Scaffold(
         bottomBar = {
             NavigationBar {
-                val pages = listOf(
-                    "Home", "Search", "Post", "History", "Profile"
-                )
-
+                val pages = listOf("Home", "Search", "Post", "History", "Profile")
                 pages.forEach { page ->
                     NavigationBarItem(
                         selected = selectedPage == page,
@@ -421,14 +380,12 @@ fun FindQitMainContent(
             }
         }
     ) { padding ->
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(AppBackground)
                 .padding(padding)
         ) {
-
             if (message.isNotBlank()) {
                 Text(
                     message,
@@ -441,23 +398,15 @@ fun FindQitMainContent(
             }
 
             when (selectedPage) {
-
                 "Home", "Search" -> {
-
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Image(
                                 painter = painterResource(R.drawable.findqit_logo),
                                 contentDescription = "FindQit Logo",
                                 modifier = Modifier.size(48.dp)
                             )
-
                             Spacer(Modifier.width(10.dp))
-
                             Text(
                                 "FindQit",
                                 fontSize = 27.sp,
@@ -500,33 +449,20 @@ fun FindQitMainContent(
                             value = search,
                             onValueChange = { search = it },
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = {
-                                Text("Search item or college...")
-                            },
+                            placeholder = { Text("Search item or college...") },
                             leadingIcon = {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = null
-                                )
+                                Icon(Icons.Default.Search, contentDescription = null)
                             },
                             shape = RoundedCornerShape(15.dp),
                             singleLine = true
                         )
 
                         Spacer(Modifier.height(12.dp))
-
-                        Text(
-                            "Categories",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
+                        Text("Categories", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
 
                         Row(
-                            modifier = Modifier.horizontalScroll(
-                                rememberScrollState()
-                            ),
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
                             categories.forEach { name ->
@@ -539,25 +475,19 @@ fun FindQitMainContent(
                         }
 
                         Spacer(Modifier.height(10.dp))
-
                         Text(
-                            if (selectedPage == "Search")
-                                "Search All Colleges"
-                            else
-                                "Recent Listings",
+                            if (selectedPage == "Search") "Search All Colleges"
+                            else "Recent Listings",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             FilterChip(
                                 selected = selectedTab == "Lost",
                                 onClick = { selectedTab = "Lost" },
                                 label = { Text("Lost Items") }
                             )
-
                             FilterChip(
                                 selected = selectedTab == "Found",
                                 onClick = { selectedTab = "Found" },
@@ -583,9 +513,7 @@ fun FindQitMainContent(
                             item.category.contains(search, true)
 
                         item.status.equals(selectedTab, true) &&
-                        collegeMatches &&
-                        categoryMatches &&
-                        searchMatches
+                            collegeMatches && categoryMatches && searchMatches
                     }
 
                     LazyColumn(
@@ -614,9 +542,7 @@ fun FindQitMainContent(
 
                         if (filtered.isEmpty()) {
                             item {
-                                EmptyState(
-                                    text = "No ${selectedTab.lowercase()} items found."
-                                )
+                                EmptyState("No ${selectedTab.lowercase()} items found.")
                             }
                         }
                     }
@@ -626,7 +552,6 @@ fun FindQitMainContent(
                     PostScreen(
                         selectedCollege = college.name,
                         onPost = { title, description, categoryValue, status ->
-
                             repository.postItem(
                                 title = title,
                                 description = description,
@@ -646,9 +571,7 @@ fun FindQitMainContent(
 
                 "History" -> {
                     Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
+                        Modifier.fillMaxSize().padding(16.dp)
                     ) {
                         Text(
                             "My Solved History",
@@ -656,7 +579,6 @@ fun FindQitMainContent(
                             fontWeight = FontWeight.Bold,
                             color = Blue
                         )
-
                         Spacer(Modifier.height(15.dp))
 
                         if (history.isEmpty()) {
@@ -666,11 +588,7 @@ fun FindQitMainContent(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 items(history, key = { it.id }) { item ->
-                                    ItemCard(
-                                        item = item,
-                                        showSolvedButton = false,
-                                        onSolved = {}
-                                    )
+                                    ItemCard(item, false, {})
                                 }
                             }
                         }
@@ -679,9 +597,7 @@ fun FindQitMainContent(
 
                 "Profile" -> {
                     Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(20.dp)
+                        Modifier.fillMaxSize().padding(20.dp)
                     ) {
                         Text(
                             "My Profile",
@@ -689,7 +605,6 @@ fun FindQitMainContent(
                             fontWeight = FontWeight.Bold,
                             color = Blue
                         )
-
                         Spacer(Modifier.height(20.dp))
 
                         Card(
@@ -705,25 +620,17 @@ fun FindQitMainContent(
                                     tint = Blue,
                                     modifier = Modifier.size(55.dp)
                                 )
-
                                 Text(
                                     "My Account",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp
                                 )
-
-                                Text(
-                                    "Mobile number: Hidden",
-                                    color = Color.Gray
-                                )
-
+                                Text("Mobile number: Hidden", color = Color.Gray)
                                 Spacer(Modifier.height(12.dp))
-
                                 Text(
                                     "College: ${college.name}",
                                     fontWeight = FontWeight.Medium
                                 )
-
                                 Text(
                                     "${college.district}, ${college.state}",
                                     color = Color.Gray
@@ -737,22 +644,14 @@ fun FindQitMainContent(
                             onClick = onChangeCollege,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                Icons.Default.School,
-                                contentDescription = null
-                            )
+                            // FIX: use an available icon
+                            Icon(Icons.Default.Home, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Change College")
                         }
 
                         Spacer(Modifier.height(18.dp))
-
-                        Text(
-                            "My Listings",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-
+                        Text("My Listings", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Spacer(Modifier.height(8.dp))
 
                         OutlinedButton(
@@ -766,22 +665,14 @@ fun FindQitMainContent(
                         }
 
                         OutlinedButton(
-                            onClick = {
-                                selectedPage = "History"
-                            },
+                            onClick = { selectedPage = "History" },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("My Solved History (${history.size})")
                         }
 
                         Spacer(Modifier.height(20.dp))
-
-                        Text(
-                            "Privacy",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-
+                        Text("Privacy", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Text(
                             "Your personal contact details are not displayed publicly.",
                             color = Color.Gray,
@@ -799,11 +690,8 @@ fun FindQitMainContent(
                                 containerColor = Color(0xFFD93636)
                             )
                         ) {
-                            Icon(
-                                  Icons.Default.ExitToApp,
-                                  contentDescription = null
-                                  )
-                            
+                            // FIX: use ExitToApp instead of Logout
+                            Icon(Icons.Default.ExitToApp, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Logout")
                         }
@@ -812,22 +700,12 @@ fun FindQitMainContent(
 
                 "MyItems" -> {
                     Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
+                        Modifier.fillMaxSize().padding(16.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = { selectedPage = "Profile" }
-                            ) {
-                                Icon(
-                                    Icons.Default.ArrowBack,
-                                    contentDescription = "Back"
-                                )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { selectedPage = "Profile" }) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                             }
-
                             Text(
                                 "My Items",
                                 fontSize = 24.sp,
@@ -838,15 +716,12 @@ fun FindQitMainContent(
 
                         Spacer(Modifier.height(10.dp))
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(
                                 selected = selectedTab == "Lost",
                                 onClick = { selectedTab = "Lost" },
                                 label = { Text("My Lost") }
                             )
-
                             FilterChip(
                                 selected = selectedTab == "Found",
                                 onClick = { selectedTab = "Found" },
@@ -891,16 +766,10 @@ fun FindQitMainContent(
 @Composable
 fun EmptyState(text: String) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(25.dp),
+        modifier = Modifier.fillMaxWidth().padding(25.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text,
-            color = Color.Gray,
-            fontSize = 14.sp
-        )
+        Text(text, color = Color.Gray, fontSize = 14.sp)
     }
 }
 
@@ -916,12 +785,9 @@ fun ItemCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        )
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(Modifier.padding(15.dp)) {
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -951,9 +817,7 @@ fun ItemCard(
             }
 
             Spacer(Modifier.height(8.dp))
-
             Text(item.description, color = Color.DarkGray)
-
             Spacer(Modifier.height(5.dp))
 
             Text(
@@ -964,11 +828,7 @@ fun ItemCard(
 
             if (item.imageUrl.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "Image attached",
-                    color = Blue,
-                    fontSize = 12.sp
-                )
+                Text("Image attached", color = Blue, fontSize = 12.sp)
             }
 
             Spacer(Modifier.height(10.dp))
@@ -997,7 +857,6 @@ fun PostScreen(
     var description by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf("LOST") }
     var selectedCategory by remember { mutableStateOf("Others") }
-
     var warning by remember { mutableStateOf("") }
 
     val categories = listOf(
@@ -1019,13 +878,7 @@ fun PostScreen(
         )
 
         Spacer(Modifier.height(15.dp))
-
-        Text(
-            "College: $selectedCollege",
-            fontWeight = FontWeight.Bold,
-            color = Blue
-        )
-
+        Text("College: $selectedCollege", fontWeight = FontWeight.Bold, color = Blue)
         Spacer(Modifier.height(15.dp))
 
         OutlinedTextField(
@@ -1047,11 +900,7 @@ fun PostScreen(
         )
 
         Spacer(Modifier.height(15.dp))
-
-        Text(
-            "Select Item Type",
-            fontWeight = FontWeight.Bold
-        )
+        Text("Select Item Type", fontWeight = FontWeight.Bold)
 
         Row {
             FilterChip(
@@ -1059,9 +908,7 @@ fun PostScreen(
                 onClick = { selectedStatus = "LOST" },
                 label = { Text("Lost") }
             )
-
             Spacer(Modifier.width(10.dp))
-
             FilterChip(
                 selected = selectedStatus == "FOUND",
                 onClick = { selectedStatus = "FOUND" },
@@ -1070,17 +917,11 @@ fun PostScreen(
         }
 
         Spacer(Modifier.height(15.dp))
-
-        Text(
-            "Category",
-            fontWeight = FontWeight.Bold
-        )
+        Text("Category", fontWeight = FontWeight.Bold)
 
         Column {
             categories.chunked(2).forEach { group ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     group.forEach { value ->
                         FilterChip(
                             selected = selectedCategory == value,
@@ -1114,10 +955,8 @@ fun PostScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(
-                Icons.Default.Send, 
-                contentDescription = null
-            )
+            // FIX: use Send instead of Publish
+            Icon(Icons.Default.Send, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Publish Item")
         }
