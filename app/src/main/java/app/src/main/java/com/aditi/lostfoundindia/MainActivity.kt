@@ -392,7 +392,10 @@ fun FindQitMainContent(
 ) {
     val repository = remember { FirebaseRepository() }
     val auth = remember { FirebaseAuth.getInstance() }
+    val chatRepository = remember { ChatRepository() }
 
+var selectedChatId by remember { mutableStateOf("") }
+var selectedChatTitle by remember { mutableStateOf("") }
     var activeItems by remember {
         mutableStateOf<List<FindQitItem>>(emptyList())
     }
@@ -506,9 +509,10 @@ fun FindQitMainContent(
                                     "Home" -> "⌂"
                                     "Search" -> "⌕"
                                     "Post" -> "+"
+                                    "Chats" -> "💬"
                                     "History" -> "◷"
                                     else -> "○"
-                                },
+                                }
                                 fontSize = 21.sp
                             )
                         },
@@ -572,6 +576,7 @@ fun FindQitMainContent(
             when (selectedPage) {
                 "Home", "Search" -> {
                     ItemListScreen(
+                        onOpenChat: (FindQitItem) -> Unit
                         page = selectedPage,
                         items = visibleItems,
                         loading = loading,
@@ -672,6 +677,19 @@ fun FindQitMainContent(
 
 @Composable
 fun ItemListScreen(
+    onOpenChat = { item ->
+    chatRepository.openChat(
+        item = item,
+        onSuccess = { chatId ->
+            selectedChatId = chatId
+            selectedChatTitle = item.title
+            selectedPage = "ChatRoom"
+        },
+        onError = {
+            notice = it
+        }
+    )
+}
     page: String,
     items: List<FindQitItem>,
     loading: Boolean,
@@ -793,6 +811,10 @@ fun ItemListScreen(
 
 @Composable
 fun ItemCard(
+    onChat = {
+    onOpenChat(item)
+}
+    onChat: () -> Unit
     item: FindQitItem,
     onMarkSolved: () -> Unit
 ) {
