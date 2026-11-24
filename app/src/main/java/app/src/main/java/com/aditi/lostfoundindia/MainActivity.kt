@@ -800,9 +800,10 @@ fun FindQitMainContent(
                             )
                         ) {
                             Icon(
-                                Icons.Default.Logout,
-                                contentDescription = null
-                            )
+                                  Icons.Default.ExitToApp,
+                                  contentDescription = null
+                                  )
+                            
                             Spacer(Modifier.width(8.dp))
                             Text("Logout")
                         }
@@ -1114,7 +1115,7 @@ fun PostScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(
-                Icons.Default.Publish,
+                Icons.Default.Send, 
                 contentDescription = null
             )
             Spacer(Modifier.width(8.dp))
