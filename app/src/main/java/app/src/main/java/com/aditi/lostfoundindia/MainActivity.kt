@@ -1,15 +1,13 @@
 
 package com.aditi.lostfoundindia
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import coil.compose.AsyncImage
-import com.google.firebase.storage.FirebaseStorage
-import java.util.UUID
+
 import android.app.Activity
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,9 +25,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.storage.FirebaseStorage
+import java.util.UUID
 
 private val AppBlue = Color(0xFF2457C5)
 private val AppBackground = Color(0xFFF5F7FC)
@@ -56,10 +57,9 @@ fun FindQitApp() {
     }
 
     var collegeName by remember { mutableStateOf("") }
-    var collegeDistrict by remember { mutableStateOf("") }
-    var collegeState by remember { mutableStateOf("") }
     var checkingProfile by remember { mutableStateOf(false) }
     var changingCollege by remember { mutableStateOf(false) }
+    var profileError by remember { mutableStateOf("") }
 
     DisposableEffect(Unit) {
         val listener = FirebaseAuth.AuthStateListener {
@@ -78,22 +78,21 @@ fun FindQitApp() {
 
         if (uid == null) {
             collegeName = ""
-            collegeDistrict = ""
-            collegeState = ""
             checkingProfile = false
+            profileError = ""
         } else {
             checkingProfile = true
+            profileError = ""
 
             db.collection("users")
                 .document(uid)
                 .get()
                 .addOnSuccessListener { document ->
                     collegeName = document.getString("collegeName") ?: ""
-                    collegeDistrict = document.getString("collegeDistrict") ?: ""
-                    collegeState = document.getString("collegeState") ?: ""
                     checkingProfile = false
                 }
-                .addOnFailureListener {
+                .addOnFailureListener { error ->
+                    profileError = error.message ?: "Profile could not load"
                     checkingProfile = false
                 }
         }
@@ -109,32 +108,49 @@ fun FindQitApp() {
         }
 
         collegeName.isBlank() || changingCollege -> {
-            CollegeSelectionScreen(
-                onCollegeSelected = { college ->
-                    val uid = auth.currentUser?.uid
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(AppBackground)
+            ) {
+                if (profileError.isNotBlank()) {
+                    Text(
+                        profileError,
+                        color = Color.Red,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
 
-                    if (uid != null) {
-                        val userData = hashMapOf(
-                            "collegeName" to college.name,
-                            "collegeDistrict" to college.district,
-                            "collegeState" to college.state
-                        )
+                CollegeSelectionScreen(
+                    onCollegeSelected = { college ->
+                        val uid = auth.currentUser?.uid
 
-                        db.collection("users")
-                            .document(uid)
-                            .set(userData)
-                            .addOnSuccessListener {
-                                collegeName = college.name
-                                collegeDistrict = college.district
-                                collegeState = college.state
-                                changingCollege = false
-                            }
-                    }
-                },
-                onBack = if (collegeName.isNotBlank()) {
-                    { changingCollege = false }
-                } else null
-            )
+                        if (uid != null) {
+                            val userData = hashMapOf(
+                                "collegeName" to college.name,
+                                "collegeDistrict" to college.district,
+                                "collegeState" to college.state
+                            )
+
+                            db.collection("users")
+                                .document(uid)
+                                .set(userData)
+                                .addOnSuccessListener {
+                                    collegeName = college.name
+                                    changingCollege = false
+                                    profileError = ""
+                                }
+                                .addOnFailureListener { error ->
+                                    profileError =
+                                        error.message ?: "College could not be saved"
+                                }
+                        }
+                    },
+                    onBack = if (collegeName.isNotBlank()) {
+                        { changingCollege = false }
+                    } else null
+                )
+            }
         }
 
         else -> {
@@ -159,13 +175,19 @@ fun LoadingScreen(message: String) {
             .background(AppBackground),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             CircularProgressIndicator(color = AppBlue)
             Spacer(Modifier.height(15.dp))
             Text(message, color = Color.Gray)
         }
     }
 }
+
+// ----------------------------------------------------
+// PHONE OTP LOGIN
+// ----------------------------------------------------
 
 @Composable
 fun PhoneLoginScreen() {
@@ -202,7 +224,7 @@ fun PhoneLoginScreen() {
             color = Color.Gray
         )
 
-        Spacer(Modifier.height(35.dp))
+        Spacer(Modifier.height(30.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -226,8 +248,7 @@ fun PhoneLoginScreen() {
                     OutlinedTextField(
                         value = phone,
                         onValueChange = {
-                            phone = it.filter { char -> char.isDigit() }
-                                .take(10)
+                            phone = it.filter { ch -> ch.isDigit() }.take(10)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Mobile Number") },
@@ -284,8 +305,7 @@ fun PhoneLoginScreen() {
                     OutlinedTextField(
                         value = otp,
                         onValueChange = {
-                            otp = it.filter { char -> char.isDigit() }
-                                .take(6)
+                            otp = it.filter { ch -> ch.isDigit() }.take(6)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Enter OTP") },
@@ -360,6 +380,10 @@ fun PhoneLoginScreen() {
     }
 }
 
+// ----------------------------------------------------
+// MAIN APP
+// ----------------------------------------------------
+
 @Composable
 fun FindQitMainContent(
     collegeName: String,
@@ -398,6 +422,7 @@ fun FindQitMainContent(
                 onData = {
                     activeItems = it
                     loading = false
+                    errorMessage = ""
                 },
                 onError = {
                     errorMessage = it
@@ -508,13 +533,16 @@ fun FindQitMainContent(
                     .padding(horizontal = 18.dp, vertical = 15.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
                         "FindQit",
                         fontSize = 25.sp,
                         fontWeight = FontWeight.Bold,
                         color = AppBlue
                     )
+
                     Text(
                         collegeName,
                         fontSize = 11.sp,
@@ -591,7 +619,8 @@ fun FindQitMainContent(
 
                 "Profile" -> {
                     ProfileScreen(
-                        phone = auth.currentUser?.phoneNumber ?: "Not available",
+                        phone = auth.currentUser?.phoneNumber
+                            ?: "Not available",
                         collegeName = collegeName,
                         onChangeCollege = onChangeCollege,
                         onMyItems = {
@@ -606,7 +635,9 @@ fun FindQitMainContent(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         TextButton(
-                            onClick = { selectedPage = "Profile" }
+                            onClick = {
+                                selectedPage = "Profile"
+                            }
                         ) {
                             Text("← Back to Profile")
                         }
@@ -634,6 +665,10 @@ fun FindQitMainContent(
         }
     }
 }
+
+// ----------------------------------------------------
+// HOME AND SEARCH LIST
+// ----------------------------------------------------
 
 @Composable
 fun ItemListScreen(
@@ -691,7 +726,9 @@ fun ItemListScreen(
             listOf("ALL", "LOST", "FOUND").forEach { filter ->
                 FilterChip(
                     selected = selectedFilter == filter,
-                    onClick = { onFilterChange(filter) },
+                    onClick = {
+                        onFilterChange(filter)
+                    },
                     label = {
                         Text(
                             when (filter) {
@@ -707,40 +744,52 @@ fun ItemListScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        if (loading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = AppBlue)
+        when {
+            loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = AppBlue)
+                }
             }
-        } else if (errorMessage.isNotBlank()) {
-            Text(
-                errorMessage,
-                color = MaterialTheme.colorScheme.error
-            )
-        } else if (items.isEmpty()) {
-            EmptyState("No matching items found.")
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 20.dp)
-            ) {
-                items(items, key = { it.id }) { item ->
-                    ItemCard(
-                        item = item,
-                        onMarkSolved = {
-                            onMarkSolved(item)
-                        }
-                    )
+
+            errorMessage.isNotBlank() -> {
+                Text(
+                    errorMessage,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            items.isEmpty() -> {
+                EmptyState("No matching items found.")
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 20.dp)
+                ) {
+                    items(items, key = { it.id }) { item ->
+                        ItemCard(
+                            item = item,
+                            onMarkSolved = {
+                                onMarkSolved(item)
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+// ----------------------------------------------------
+// ITEM CARD
+// ----------------------------------------------------
 
 @Composable
 fun ItemCard(
@@ -767,10 +816,10 @@ fun ItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    color = if (item.status == "LOST") {
-                        Color(0xFFFFE8E8)
-                    } else {
-                        Color(0xFFE5F5E9)
+                    color = when (item.status) {
+                        "LOST" -> Color(0xFFFFE8E8)
+                        "FOUND" -> Color(0xFFE5F5E9)
+                        else -> Color(0xFFE8EFFF)
                     },
                     shape = RoundedCornerShape(8.dp)
                 ) {
@@ -780,10 +829,10 @@ fun ItemCard(
                             horizontal = 10.dp,
                             vertical = 5.dp
                         ),
-                        color = if (item.status == "LOST") {
-                            Color(0xFFB3261E)
-                        } else {
-                            Color(0xFF217A3A)
+                        color = when (item.status) {
+                            "LOST" -> Color(0xFFB3261E)
+                            "FOUND" -> Color(0xFF217A3A)
+                            else -> AppBlue
                         },
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -824,15 +873,18 @@ fun ItemCard(
             )
 
             if (item.imageUrl.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Photo attached",
-                    color = AppBlue,
-                    fontSize = 12.sp
+                Spacer(Modifier.height(12.dp))
+
+                AsyncImage(
+                    model = item.imageUrl,
+                    contentDescription = item.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(190.dp)
                 )
             }
 
-            if (isOwner) {
+            if (isOwner && item.status != "SOLVED") {
                 Spacer(Modifier.height(12.dp))
 
                 OutlinedButton(
@@ -846,120 +898,9 @@ fun ItemCard(
     }
 }
 
-{
-    val repository = remember { FirebaseRepository() }
-
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("Electronics") }
-    var status by remember { mutableStateOf("LOST") }
-    var loading by remember { mutableStateOf(false) }
-
-    val categories = listOf(
-        "Electronics",
-        "Documents",
-        "ID Card",
-        "Wallet",
-        "Keys",
-        "Books",
-        "Bags",
-        "Clothing",
-        "Others"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(18.dp)
-    ) {
-        Text(
-            "Post an Item",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            "Share details about the lost or found item.",
-            color = Color.Gray,
-            fontSize = 12.sp
-        )
-
-        Spacer(Modifier.height(18.dp))
-
-        Text(
-            "Select Type",
-            fontWeight = FontWeight.Bold
-        )
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            FilterChip(
-                selected = status == "LOST",
-                onClick = { status = "LOST" },
-                label = { Text("I Lost Something") }
-            )
-
-            FilterChip(
-                selected = status == "FOUND",
-                onClick = { status = "FOUND" },
-                label = { Text("I Found Something") }
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Item Name") },
-            placeholder = { Text("Example: Samsung phone") },
-            singleLine = true
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = description,
-            onValueChange = { description = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Description and Location") },
-            placeholder = {
-                Text("Describe the item and where it was lost/found")
-            },
-            minLines = 3
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        Text(
-            "Category",
-            fontWeight = FontWeight.Bold
-        )
-
-        var categoryExpanded by remember {
-            mutableStateOf(false)
-        }
-
-        Box {
-            OutlinedButton(
-                onClick = { categoryExpanded = true },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(category)
-            }
-
-            DropdownMenu(
-                expanded = categoryExpanded,
-                onDismissRequest = {
-                    categoryExpanded = false
-                }
-            ) {
-                categories.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-
+// ----------------------------------------------------
+// POST ITEM WITH PHOTO UPLOAD
+// ----------------------------------------------------
 
 @Composable
 fun PostScreen(
@@ -977,11 +918,18 @@ fun PostScreen(
     var status by remember { mutableStateOf("LOST") }
     var selectedImage by remember { mutableStateOf<Uri?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
 
     val categories = listOf(
-        "Electronics", "Documents", "ID Card",
-        "Wallet", "Keys", "Books", "Bags",
-        "Clothing", "Others"
+        "Electronics",
+        "Documents",
+        "ID Card",
+        "Wallet",
+        "Keys",
+        "Books",
+        "Bags",
+        "Clothing",
+        "Others"
     )
 
     val imagePicker = rememberLauncherForActivityResult(
@@ -1032,6 +980,7 @@ fun PostScreen(
             onValueChange = { title = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Item Name") },
+            placeholder = { Text("Example: Samsung phone") },
             singleLine = true
         )
 
@@ -1042,14 +991,18 @@ fun PostScreen(
             onValueChange = { description = it },
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Description and Location") },
+            placeholder = {
+                Text("Describe the item and where it was lost/found")
+            },
             minLines = 3
         )
 
         Spacer(Modifier.height(12.dp))
 
-        Text("Category", fontWeight = FontWeight.Bold)
-
-        var expanded by remember { mutableStateOf(false) }
+        Text(
+            "Category",
+            fontWeight = FontWeight.Bold
+        )
 
         Box {
             OutlinedButton(
@@ -1061,7 +1014,9 @@ fun PostScreen(
 
             DropdownMenu(
                 expanded = expanded,
-                onDismissRequest = { expanded = false }
+                onDismissRequest = {
+                    expanded = false
+                }
             ) {
                 categories.forEach { option ->
                     DropdownMenuItem(
@@ -1077,12 +1032,17 @@ fun PostScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        Text("College: $collegeName", color = Color.Gray)
+        Text(
+            "College: $collegeName",
+            color = Color.Gray
+        )
 
         Spacer(Modifier.height(12.dp))
 
         OutlinedButton(
-            onClick = { imagePicker.launch("image/*") },
+            onClick = {
+                imagePicker.launch("image/*")
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
@@ -1103,6 +1063,14 @@ fun PostScreen(
                     .fillMaxWidth()
                     .height(190.dp)
             )
+
+            TextButton(
+                onClick = {
+                    selectedImage = null
+                }
+            ) {
+                Text("Remove Photo")
+            }
         }
 
         Spacer(Modifier.height(18.dp))
@@ -1131,7 +1099,7 @@ fun PostScreen(
                         category = category,
                         status = status,
                         imageUrl = imageUrl,
-                        onSuccess = {
+                        onSuccess = { _ ->
                             loading = false
                             onPosted()
                         },
@@ -1148,7 +1116,9 @@ fun PostScreen(
                     saveItem("")
                 } else {
                     val imageRef = storage.reference
-                        .child("item_images/$uid/${UUID.randomUUID()}.jpg")
+                        .child(
+                            "item_images/$uid/${UUID.randomUUID()}.jpg"
+                        )
 
                     imageRef.putFile(imageUri)
                         .addOnSuccessListener {
@@ -1159,7 +1129,8 @@ fun PostScreen(
                                 .addOnFailureListener { error ->
                                     loading = false
                                     onError(
-                                        error.message ?: "Could not get photo URL"
+                                        error.message
+                                            ?: "Could not get photo URL"
                                     )
                                 }
                         }
@@ -1176,12 +1147,24 @@ fun PostScreen(
                 .height(52.dp),
             enabled = !loading
         ) {
-            Text(
-                if (loading) "Uploading..." else "Publish Item"
-            )
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Uploading...")
+            } else {
+                Text("Publish Item")
+            }
         }
     }
 }
+
+// ----------------------------------------------------
+// MY ITEMS AND HISTORY
+// ----------------------------------------------------
 
 @Composable
 fun MyItemsScreen(
@@ -1225,6 +1208,10 @@ fun MyItemsScreen(
     }
 }
 
+// ----------------------------------------------------
+// PROFILE
+// ----------------------------------------------------
+
 @Composable
 fun ProfileScreen(
     phone: String,
@@ -1248,34 +1235,38 @@ fun ProfileScreen(
 
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
                 containerColor = Color.White
-            ),
-            shape = RoundedCornerShape(16.dp)
+            )
         ) {
             Column(
                 modifier = Modifier.padding(18.dp)
             ) {
                 Text(
-                    "FindQit User",
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold
+                    "Mobile Number",
+                    color = Color.Gray,
+                    fontSize = 12.sp
                 )
 
-                Spacer(Modifier.height(12.dp))
-
-                Text("Mobile Number", color = Color.Gray)
                 Text(
                     phone,
-                    fontWeight = FontWeight.Medium
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
                 )
 
                 Spacer(Modifier.height(15.dp))
 
-                Text("My College", color = Color.Gray)
+                Text(
+                    "Selected College",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+
                 Text(
                     collegeName,
-                    fontWeight = FontWeight.Medium
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -1286,7 +1277,7 @@ fun ProfileScreen(
             onClick = onMyItems,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("My Active Items")
+            Text("My Listings")
         }
 
         Spacer(Modifier.height(10.dp))
@@ -1309,29 +1300,38 @@ fun ProfileScreen(
         ) {
             Text("Logout")
         }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            "FindQit helps students connect to recover lost belongings.",
-            color = Color.Gray,
-            fontSize = 12.sp
-        )
     }
 }
+
+// ----------------------------------------------------
+// EMPTY STATE
+// ----------------------------------------------------
 
 @Composable
 fun EmptyState(message: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(35.dp),
+            .padding(30.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            message,
-            color = Color.Gray,
-            fontSize = 14.sp
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                "Nothing here yet",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.DarkGray
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Text(
+                message,
+                color = Color.Gray,
+                fontSize = 13.sp
+            )
+        }
     }
 }
