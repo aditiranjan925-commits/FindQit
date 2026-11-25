@@ -2,7 +2,9 @@
 package com.aditi.lostfoundindia
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import java.security.MessageDigest
@@ -14,7 +16,8 @@ data class ChatRoom(
     val participants: List<String> = emptyList(),
     val lastMessage: String = "",
     val lastSenderId: String = "",
-    val updatedAt: Long = 0L
+    val updatedAt: Long = 0L,
+    val unreadCounts: Map<String, Long> = emptyMap()
 )
 
 data class ChatMessage(
@@ -72,14 +75,8 @@ class ChatRepository {
             return
         }
 
-        val chatId = makeChatId(
-            item.id,
-            uid,
-            item.ownerId
-        )
-
-        val chatRef = db.collection("chatRooms")
-            .document(chatId)
+        val chatId = makeChatId(item.id, uid, item.ownerId)
+        val chatRef = db.collection("chatRooms").document(chatId)
 
         chatRef.get()
             .addOnSuccessListener { document ->
@@ -87,13 +84,18 @@ class ChatRepository {
                 if (document.exists()) {
                     onSuccess(chatId)
                 } else {
+
                     val room = hashMapOf(
                         "itemId" to item.id,
                         "itemTitle" to item.title,
                         "participants" to listOf(uid, item.ownerId),
                         "lastMessage" to "",
                         "lastSenderId" to "",
-                        "updatedAt" to System.currentTimeMillis()
+                        "updatedAt" to System.currentTimeMillis(),
+                        "unreadCounts" to mapOf(
+                            uid to 0L,
+                            item.ownerId to 0L
+                        )
                     )
 
                     chatRef.set(room)
@@ -159,6 +161,23 @@ class ChatRepository {
             }
     }
 
+    fun markChatRead(
+        chatId: String,
+        onError: (String) -> Unit = {}
+    ) {
+        val uid = currentUid() ?: return
+
+        db.collection("chatRooms")
+            .document(chatId)
+            .update(
+                FieldPath.of("unreadCounts", uid),
+                0L
+            )
+            .addOnFailureListener {
+                onError(it.message ?: "Could not mark messages as read.")
+            }
+    }
+
     fun sendMessage(
         chatId: String,
         message: String,
@@ -178,30 +197,58 @@ class ChatRepository {
         val chatRef = db.collection("chatRooms")
             .document(chatId)
 
-        val messageData = hashMapOf(
-            "senderId" to uid,
-            "text" to cleanMessage,
-            "timestamp" to System.currentTimeMillis()
-        )
+        chatRef.get()
+            .addOnSuccessListener { roomSnapshot ->
 
-        db.runBatch { batch ->
+                if (!roomSnapshot.exists()) {
+                    onError("Chat room not found.")
+                    return@addOnSuccessListener
+                }
 
-            val messageRef = chatRef
-                .collection("messages")
-                .document()
+                val participants =
+                    roomSnapshot.get("participants") as? List<*>
 
-            batch.set(messageRef, messageData)
+                val receiverUid = participants
+                    ?.filterIsInstance<String>()
+                    ?.firstOrNull { it != uid }
 
-            batch.update(
-                chatRef,
-                mapOf(
-                    "lastMessage" to cleanMessage,
-                    "lastSenderId" to uid,
-                    "updatedAt" to System.currentTimeMillis()
+                if (receiverUid == null) {
+                    onError("Receiver not found.")
+                    return@addOnSuccessListener
+                }
+
+                val messageData = hashMapOf(
+                    "senderId" to uid,
+                    "text" to cleanMessage,
+                    "timestamp" to System.currentTimeMillis()
                 )
-            )
-        }.addOnFailureListener {
-            onError(it.message ?: "Message could not be sent.")
-        }
+
+                val messageRef = chatRef
+                    .collection("messages")
+                    .document()
+
+                val batch = db.batch()
+
+                batch.set(messageRef, messageData)
+
+                batch.update(
+                    chatRef,
+                    mapOf(
+                        "lastMessage" to cleanMessage,
+                        "lastSenderId" to uid,
+                        "updatedAt" to System.currentTimeMillis(),
+                        FieldPath.of("unreadCounts", receiverUid) to
+                            FieldValue.increment(1L)
+                    )
+                )
+
+                batch.commit()
+                    .addOnFailureListener {
+                        onError(it.message ?: "Message could not be sent.")
+                    }
+            }
+            .addOnFailureListener {
+                onError(it.message ?: "Could not send message.")
+            }
     }
 }
