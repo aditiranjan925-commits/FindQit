@@ -31,6 +31,7 @@ fun ChatInboxScreen(
     onOpenChat: (String, String) -> Unit
 ) {
     val repository = remember { ChatRepository() }
+    val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
     var chats by remember {
         mutableStateOf<List<ChatRoom>>(emptyList())
@@ -100,9 +101,14 @@ fun ChatInboxScreen(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("No chats yet", fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold)
+                        Text(
+                            "No chats yet",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
                         Spacer(Modifier.height(8.dp))
+
                         Text(
                             "Open a Lost or Found item and chat with its owner.",
                             color = Color.Gray
@@ -116,6 +122,9 @@ fun ChatInboxScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(chats, key = { it.id }) { chat ->
+
+                        val unread = chat.unreadCounts[currentUid] ?: 0L
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
@@ -126,35 +135,79 @@ fun ChatInboxScreen(
                                 onOpenChat(chat.id, chat.itemTitle)
                             }
                         ) {
-                            Column(
-                                Modifier.padding(16.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    chat.itemTitle.ifBlank {
-                                        "Item conversation"
-                                    },
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 17.sp
-                                )
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        chat.itemTitle.ifBlank {
+                                            "Item conversation"
+                                        },
+                                        fontWeight = if (unread > 0) {
+                                            FontWeight.Bold
+                                        } else {
+                                            FontWeight.Medium
+                                        },
+                                        fontSize = 17.sp
+                                    )
 
-                                Spacer(Modifier.height(5.dp))
+                                    Spacer(Modifier.height(5.dp))
 
-                                Text(
-                                    chat.lastMessage.ifBlank {
-                                        "Start your conversation"
-                                    },
-                                    color = Color.Gray,
-                                    fontSize = 13.sp,
-                                    maxLines = 1
-                                )
+                                    Text(
+                                        chat.lastMessage.ifBlank {
+                                            "Start your conversation"
+                                        },
+                                        color = if (unread > 0) {
+                                            Color.Black
+                                        } else {
+                                            Color.Gray
+                                        },
+                                        fontWeight = if (unread > 0) {
+                                            FontWeight.Bold
+                                        } else {
+                                            FontWeight.Normal
+                                        },
+                                        fontSize = 13.sp,
+                                        maxLines = 1
+                                    )
 
-                                Spacer(Modifier.height(5.dp))
+                                    Spacer(Modifier.height(5.dp))
 
-                                Text(
-                                    "Tap to open conversation",
-                                    color = ChatBlue,
-                                    fontSize = 11.sp
-                                )
+                                    Text(
+                                        "Tap to open conversation",
+                                        color = ChatBlue,
+                                        fontSize = 11.sp
+                                    )
+                                }
+
+                                if (unread > 0) {
+                                    Spacer(Modifier.width(10.dp))
+
+                                    Surface(
+                                        color = ChatBlue,
+                                        shape = RoundedCornerShape(50)
+                                    ) {
+                                        Text(
+                                            text = if (unread > 99) {
+                                                "99+"
+                                            } else {
+                                                unread.toString()
+                                            },
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(
+                                                horizontal = 10.dp,
+                                                vertical = 6.dp
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -185,12 +238,23 @@ fun PrivateChatScreen(
     val listState = rememberLazyListState()
 
     DisposableEffect(chatId) {
+
+        // Chat open hone par unread count clear karo
+        repository.markChatRead(chatId) {
+            error = it
+        }
+
         val listener = repository.observeMessages(
             chatId = chatId,
             onData = {
                 messages = it
                 loading = false
                 error = ""
+
+                // Chat open hai, isliye messages read mark karo
+                repository.markChatRead(chatId) {
+                    error = it
+                }
             },
             onError = {
                 error = it
@@ -252,7 +316,9 @@ fun PrivateChatScreen(
 
         if (loading) {
             Box(
-                Modifier.weight(1f).fillMaxWidth(),
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = ChatBlue)
@@ -268,6 +334,7 @@ fun PrivateChatScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(messages, key = { it.id }) { message ->
+
                     val mine = message.senderId == currentUid
 
                     Column(
