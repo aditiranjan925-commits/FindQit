@@ -33,12 +33,12 @@ fun ChatInboxScreen(
 
     DisposableEffect(Unit) {
         val registration = repository.observeMyChats(
-            onData = { data ->
-                chats = data
-            },
-            onError = { message ->
-                error = message
-            }
+            onData = { data: List<ChatRoom> ->
+    chats = data
+},
+onError = { message: String ->
+    error = message
+}
         )
 
         onDispose {
@@ -192,13 +192,13 @@ fun PrivateChatScreen(
 
         val registration = repository.observeMessages(
             chatId = chatId,
-            onData = { data ->
-                messages = data
-                repository.markChatRead(chatId)
-            },
-            onError = { message ->
-                error = message
-            }
+            onData = { data: List<ChatMessage> ->
+    messages = data
+    repository.markChatRead(chatId)
+},
+onError = { message: String ->
+    error = message
+}
         )
 
         onDispose {
@@ -329,9 +329,10 @@ fun PrivateChatScreen(
                         repository.sendMessage(
                             chatId = chatId,
                             message = cleanMessage,
-                            onError = { message ->
+                            onError = { message: String ->
                                 error = message
                             }
+                            
                         )
 
                         messageText = ""
