@@ -124,17 +124,15 @@ fun ChatInboxScreen(
                     items(chats, key = { it.id }) { chat ->
 
                         val unread = chat.unreadCounts[currentUid] ?: 0L
-
+                        
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(15.dp),
-                            onClick = {
-                                onOpenChat(chat.id, chat.itemTitle)
-                            }
-                        ) {
+                           modifier = Modifier
+                              .fillMaxWidth()
+                              .clickable {
+                                     onOpenChat(room.id, room.itemTitle)
+                               }
+            .            .)
+                        {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
