@@ -4,7 +4,6 @@ package com.aditi.lostfoundindia
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import java.security.MessageDigest
@@ -160,24 +159,20 @@ class ChatRepository {
                 onData(messages)
             }
     }
-
     fun markChatRead(
-        chatId: String,
-        onError: (String) -> Unit = {}
-    ) {
-        val uid = currentUid() ?: return
+    chatId: String,
+    onError: (String) -> Unit = {}
+) {
+    val uid = currentUid() ?: return
 
-        db.collection("chatRooms")
-            .document(chatId)
-            .update(
-                FieldPath.of("unreadCounts", uid),
-                0L
-            )
-            .addOnFailureListener {
-                onError(it.message ?: "Could not mark messages as read.")
-            }
-    }
-
+    db.collection("chatRooms")
+        .document(chatId)
+        .update("unreadCounts.$uid", 0L)
+        .addOnFailureListener {
+            onError(it.message ?: "Could not mark messages as read.")
+        }
+}
+    
     fun sendMessage(
         chatId: String,
         message: String,
@@ -230,17 +225,16 @@ class ChatRepository {
                 val batch = db.batch()
 
                 batch.set(messageRef, messageData)
-
                 batch.update(
-                    chatRef,
-                    mapOf(
-                        "lastMessage" to cleanMessage,
-                        "lastSenderId" to uid,
-                        "updatedAt" to System.currentTimeMillis(),
-                        FieldPath.of("unreadCounts", receiverUid) to
-                            FieldValue.increment(1L)
-                    )
-                )
+                 chatRef,
+                  mapOf(
+        "lastMessage" to cleanMessage,
+        "lastSenderId" to uid,
+        "updatedAt" to System.currentTimeMillis(),
+        "unreadCounts.$receiverUid" to FieldValue.increment(1L)
+    )
+)
+                
 
                 batch.commit()
                     .addOnFailureListener {
