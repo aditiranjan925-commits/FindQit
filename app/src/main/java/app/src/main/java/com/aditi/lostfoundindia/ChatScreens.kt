@@ -2,6 +2,7 @@
 package com.aditi.lostfoundindia
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,192 +20,138 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.ListenerRegistration
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-private val ChatBlue = Color(0xFF2457C5)
-private val ChatBackground = Color(0xFFF5F7FC)
 
 @Composable
 fun ChatInboxScreen(
     onOpenChat: (String, String) -> Unit
 ) {
-    val repository = remember { ChatRepository() }
+    val repository = ChatRepository
     val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
-    var chats by remember {
-        mutableStateOf<List<ChatRoom>>(emptyList())
-    }
-
-    var loading by remember { mutableStateOf(true) }
+    var chats by remember { mutableStateOf<List<ChatRoom>>(emptyList()) }
     var error by remember { mutableStateOf("") }
 
     DisposableEffect(Unit) {
-        val listener: ListenerRegistration? =
-            repository.observeMyChats(
-                onData = {
-                    chats = it
-                    loading = false
-                    error = ""
-                },
-                onError = {
-                    error = it
-                    loading = false
-                }
-            )
+        val registration = repository.observeMyChats(
+            onData = { data ->
+                chats = data
+            },
+            onError = { message ->
+                error = message
+            }
+        )
 
         onDispose {
-            listener?.remove()
+            registration.remove()
         }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(ChatBackground)
             .padding(16.dp)
     ) {
         Text(
-            "My Chats",
-            fontSize = 25.sp,
+            text = "My Chats",
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
 
-        Text(
-            "Your private conversations",
-            color = Color.Gray,
-            fontSize = 13.sp
-        )
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Spacer(Modifier.height(18.dp))
+        if (error.isNotEmpty()) {
+            Text(
+                text = error,
+                color = Color.Red
+            )
+        }
 
-        when {
-            loading -> {
-                Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = ChatBlue)
-                }
+        if (chats.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No chats yet")
             }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(
+                    items = chats,
+                    key = { it.id }
+                ) { room ->
 
-            error.isNotBlank() -> {
-                Text(error, color = Color.Red)
-            }
+                    val unread =
+                        room.unreadCounts[currentUid] ?: 0L
 
-            chats.isEmpty() -> {
-                Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onOpenChat(
+                                    room.id,
+                                    room.itemTitle
+                                )
+                            },
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(
-                            "No chats yet",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Text(
-                            "Open a Lost or Found item and chat with its owner.",
-                            color = Color.Gray
-                        )
-                    }
-                }
-            }
-
-            else -> {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(chats, key = { it.id }) { chat ->
-
-                        val unread = chat.unreadCounts[currentUid] ?: 0L
-                        
-                        Card(
-                           modifier = Modifier
-                              .fillMaxWidth()
-                              .clickable {
-                                     onOpenChat(room.id, room.itemTitle)
-                               }
-            .            .)
-                        {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Column(
-                                    modifier = Modifier.weight(1f)
+                                Text(
+                                    text = room.itemTitle,
+                                    fontWeight = if (unread > 0)
+                                        FontWeight.Bold
+                                    else
+                                        FontWeight.Normal,
+                                    fontSize = 17.sp
+                                )
+
+                                Spacer(
+                                    modifier = Modifier.height(4.dp)
+                                )
+
+                                Text(
+                                    text = room.lastMessage.ifEmpty {
+                                        "Start chatting"
+                                    },
+                                    maxLines = 1,
+                                    color = if (unread > 0)
+                                        Color.Black
+                                    else
+                                        Color.Gray,
+                                    fontWeight = if (unread > 0)
+                                        FontWeight.Bold
+                                    else
+                                        FontWeight.Normal
+                                )
+                            }
+
+                            if (unread > 0) {
+                                Surface(
+                                    color = Color(0xFF1976D2),
+                                    shape = RoundedCornerShape(50)
                                 ) {
                                     Text(
-                                        chat.itemTitle.ifBlank {
-                                            "Item conversation"
-                                        },
-                                        fontWeight = if (unread > 0) {
-                                            FontWeight.Bold
-                                        } else {
-                                            FontWeight.Medium
-                                        },
-                                        fontSize = 17.sp
+                                        text = if (unread > 99)
+                                            "99+"
+                                        else
+                                            unread.toString(),
+                                        color = Color.White,
+                                        modifier = Modifier.padding(
+                                            horizontal = 10.dp,
+                                            vertical = 5.dp
+                                        ),
+                                        fontWeight = FontWeight.Bold
                                     )
-
-                                    Spacer(Modifier.height(5.dp))
-
-                                    Text(
-                                        chat.lastMessage.ifBlank {
-                                            "Start your conversation"
-                                        },
-                                        color = if (unread > 0) {
-                                            Color.Black
-                                        } else {
-                                            Color.Gray
-                                        },
-                                        fontWeight = if (unread > 0) {
-                                            FontWeight.Bold
-                                        } else {
-                                            FontWeight.Normal
-                                        },
-                                        fontSize = 13.sp,
-                                        maxLines = 1
-                                    )
-
-                                    Spacer(Modifier.height(5.dp))
-
-                                    Text(
-                                        "Tap to open conversation",
-                                        color = ChatBlue,
-                                        fontSize = 11.sp
-                                    )
-                                }
-
-                                if (unread > 0) {
-                                    Spacer(Modifier.width(10.dp))
-
-                                    Surface(
-                                        color = ChatBlue,
-                                        shape = RoundedCornerShape(50)
-                                    ) {
-                                        Text(
-                                            text = if (unread > 99) {
-                                                "99+"
-                                            } else {
-                                                unread.toString()
-                                            },
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp,
-                                            modifier = Modifier.padding(
-                                                horizontal = 10.dp,
-                                                vertical = 6.dp
-                                            )
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -221,241 +168,179 @@ fun PrivateChatScreen(
     itemTitle: String,
     onBack: () -> Unit
 ) {
-    val repository = remember { ChatRepository() }
-    val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val repository = ChatRepository
 
     var messages by remember {
-        mutableStateOf<List<ChatMessage>>(emptyList())
+        mutableStateOf<List<ChatMessage>>(emptyList>())
     }
 
-    var messageText by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf("") }
-    var sending by remember { mutableStateOf(false) }
+    var messageText by remember {
+        mutableStateOf("")
+    }
+
+    var error by remember {
+        mutableStateOf("")
+    }
+
+    val currentUid =
+        FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
     val listState = rememberLazyListState()
 
     DisposableEffect(chatId) {
+        repository.markChatRead(chatId)
 
-        // Chat open hone par unread count clear karo
-        repository.markChatRead(chatId) {
-            error = it
-        }
-
-        val listener = repository.observeMessages(
+        val registration = repository.observeMessages(
             chatId = chatId,
-            onData = {
-                messages = it
-                loading = false
-                error = ""
-
-                // Chat open hai, isliye messages read mark karo
-                repository.markChatRead(chatId) {
-                    error = it
-                }
+            onData = { data ->
+                messages = data
+                repository.markChatRead(chatId)
             },
-            onError = {
-                error = it
-                loading = false
+            onError = { message ->
+                error = message
             }
         )
 
         onDispose {
-            listener.remove()
+            registration.remove()
         }
     }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.lastIndex)
+            listState.animateScrollToItem(
+                messages.lastIndex
+            )
         }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(ChatBackground)
+        modifier = Modifier.fillMaxSize()
     ) {
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White)
-                .padding(12.dp),
+                .background(Color(0xFF1976D2))
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBack) {
-                Text("← Back")
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            Column {
-                Text(
-                    itemTitle.ifBlank { "Private Chat" },
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
-                )
-
-                Text(
-                    "Private conversation",
-                    color = Color.Gray,
-                    fontSize = 11.sp
-                )
-            }
-        }
-
-        if (error.isNotBlank()) {
             Text(
-                error,
-                color = Color.Red,
-                modifier = Modifier.padding(10.dp)
+                text = "‹",
+                fontSize = 30.sp,
+                color = Color.White,
+                modifier = Modifier.clickable {
+                    onBack()
+                }
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Text(
+                text = itemTitle,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 
-        if (loading) {
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = ChatBlue)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                state = listState,
-                contentPadding = PaddingValues(vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(messages, key = { it.id }) { message ->
+        if (error.isNotEmpty()) {
+            Text(
+                text = error,
+                color = Color.Red,
+                modifier = Modifier.padding(8.dp)
+            )
+        }
 
-                    val mine = message.senderId == currentUid
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            state = listState,
+            contentPadding = PaddingValues(vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(
+                items = messages,
+                key = { it.id }
+            ) { message ->
 
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = if (mine) {
-                            Alignment.End
-                        } else {
-                            Alignment.Start
-                        }
+                val isMine =
+                    message.senderId == currentUid
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (isMine)
+                        Arrangement.End
+                    else
+                        Arrangement.Start
+                ) {
+                    Surface(
+                        color = if (isMine)
+                            Color(0xFFDCF8C6)
+                        else
+                            Color(0xFFECECEC),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.widthIn(
+                            max = 280.dp
+                        )
                     ) {
-                        Surface(
-                            color = if (mine) {
-                                ChatBlue
-                            } else {
-                                Color.White
-                            },
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Column(
-                                Modifier
-                                    .widthIn(max = 280.dp)
-                                    .padding(
-                                        horizontal = 14.dp,
-                                        vertical = 10.dp
-                                    )
-                            ) {
-                                Text(
-                                    message.text,
-                                    color = if (mine) {
-                                        Color.White
-                                    } else {
-                                        Color.Black
-                                    },
-                                    fontSize = 15.sp
-                                )
-
-                                Spacer(Modifier.height(5.dp))
-
-                                Text(
-                                    formatChatTime(message.timestamp),
-                                    color = if (mine) {
-                                        Color.White.copy(alpha = 0.75f)
-                                    } else {
-                                        Color.Gray
-                                    },
-                                    fontSize = 10.sp,
-                                    modifier = Modifier.align(
-                                        Alignment.End
-                                    )
-                                )
-                            }
-                        }
+                        Text(
+                            text = message.text,
+                            modifier = Modifier.padding(12.dp),
+                            fontSize = 16.sp
+                        )
                     }
                 }
             }
         }
 
-        Surface(
-            color = Color.White,
-            shadowElevation = 5.dp
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            OutlinedTextField(
+                value = messageText,
+                onValueChange = {
+                    messageText = it
+                },
+                modifier = Modifier.weight(1f),
+                placeholder = {
+                    Text("Type a message")
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text
+                ),
+                shape = RoundedCornerShape(24.dp),
+                maxLines = 4
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Button(
+                onClick = {
+                    val cleanMessage =
+                        messageText.trim()
+
+                    if (cleanMessage.isNotEmpty()) {
+                        repository.sendMessage(
+                            chatId = chatId,
+                            message = cleanMessage,
+                            onError = { message ->
+                                error = message
+                            }
+                        )
+
+                        messageText = ""
+                    }
+                },
+                enabled = messageText.trim().isNotEmpty()
             ) {
-                OutlinedTextField(
-                    value = messageText,
-                    onValueChange = {
-                        if (it.length <= 2000) {
-                            messageText = it
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    placeholder = {
-                        Text("Type a message...")
-                    },
-                    shape = RoundedCornerShape(24.dp),
-                    maxLines = 4,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text
-                    )
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                Button(
-                    onClick = {
-                        val text = messageText.trim()
-
-                        if (text.isNotBlank() && !sending) {
-                            sending = true
-                            error = ""
-
-                            repository.sendMessage(
-                                chatId = chatId,
-                                message = text,
-                                onError = {
-                                    error = it
-                                    sending = false
-                                }
-                            )
-
-                            messageText = ""
-                            sending = false
-                        }
-                    },
-                    enabled = messageText.isNotBlank() && !sending,
-                    contentPadding = PaddingValues(14.dp)
-                ) {
-                    Text("Send")
-                }
+                Text("Send")
             }
         }
     }
-}
-
-private fun formatChatTime(timestamp: Long): String {
-    if (timestamp <= 0L) return ""
-
-    return SimpleDateFormat(
-        "dd MMM, hh:mm a",
-        Locale.getDefault()
-    ).format(Date(timestamp))
 }
